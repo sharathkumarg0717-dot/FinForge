@@ -1,4 +1,8 @@
 /config.local.php
+*.log
+powershell.cmd
+.vscode/
+.azure/
 /storage/*
 !/storage/.htaccess
 !/storage/README.md
