@@ -699,9 +699,111 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-investments" hidden>
-          <div class="page-heading"><div><p class="eyebrow">LONG-TERM VIEW</p><h1>Investments</h1><p class="subtitle">A synthetic holdings snapshot from your mock broker adapter.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-flask"></i> Demo portfolio</span></div>
-          <div class="investment-highlight"><div><span class="stat-label">Total demo holdings value</span><strong id="holdings-total">₹—</strong><small>Values are illustrative and can change in a real market.</small></div><div class="investment-icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
-          <article class="panel"><div class="panel-heading"><div><h2>Portfolio holdings</h2><p>Instrument names and values are entirely synthetic.</p></div><span class="period-tag">SYNTHETIC</span></div><div class="table-wrap"><table><thead><tr><th>INSTRUMENT</th><th>SYMBOL</th><th>UNITS</th><th>PRICE</th><th class="align-right">MARKET VALUE</th></tr></thead><tbody id="investments-table"></tbody></table></div></article>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">EQUITY, MUTUAL FUNDS &amp; DEMAT <span class="live-dot"></span> LIVE PORTFOLIO</p>
+              <h1>Investments &amp; Demat</h1>
+              <p class="subtitle">Track your Zerodha Demat account, live stock holdings, mutual funds, and total portfolio performance in Indian Rupees (₹).</p>
+            </div>
+            <div class="page-heading-actions">
+              <button class="primary-button zerodha-btn" id="connect-zerodha-btn" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha Demat</button>
+              <button class="outline-button" id="add-holding-btn" type="button"><i class="fa-solid fa-plus"></i> Add Holding</button>
+            </div>
+          </div>
+
+          <!-- ZERODHA DEMAT ACCOUNT STATUS CARD -->
+          <article class="panel zerodha-card" id="zerodha-banner-panel">
+            <div class="zerodha-card-body">
+              <div class="zerodha-brand-badge">
+                <span class="zerodha-kite-icon">K</span>
+                <div>
+                  <h3 id="zerodha-card-title">Zerodha Demat Account</h3>
+                  <p id="zerodha-card-sub">Not connected yet. Link your Zerodha Kite account to track real equity &amp; ETF holdings.</p>
+                </div>
+              </div>
+              <div class="zerodha-actions-wrap" id="zerodha-actions-container">
+                <button class="primary-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha</button>
+              </div>
+            </div>
+            <div id="zerodha-connected-details" class="zerodha-details-row" hidden>
+              <div class="zerodha-detail-pill"><span>Broker:</span> <b>Zerodha Broking Ltd</b></div>
+              <div class="zerodha-detail-pill"><span>Client ID:</span> <b id="zerodha-client-display">—</b></div>
+              <div class="zerodha-detail-pill"><span>Depository:</span> <b>CDSL</b></div>
+              <div class="zerodha-detail-pill"><span>Status:</span> <span class="status-chip success-chip">Active Demat</span></div>
+              <div class="zerodha-detail-pill"><span>Last Synced:</span> <span id="zerodha-synced-at">Just now</span></div>
+            </div>
+          </article>
+
+          <!-- PORTFOLIO PERFORMANCE METRICS -->
+          <div class="stat-grid" style="margin-bottom: 20px;">
+            <article class="stat-card feature-stat">
+              <div class="stat-top">
+                <span class="stat-label">Total Portfolio Value</span>
+                <span class="stat-icon blue-icon"><i class="fa-solid fa-arrow-trend-up"></i></span>
+              </div>
+              <div class="stat-value" id="holdings-total">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note" id="holdings-count-note">0 instruments</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <span class="stat-label">Total Invested Cost</span>
+                <span class="stat-icon gray-icon"><i class="fa-solid fa-money-bill-wave"></i></span>
+              </div>
+              <div class="stat-value" id="portfolio-invested">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note">Total buy capital</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <span class="stat-label">Total Returns (P&amp;L)</span>
+                <span class="stat-icon green-icon" id="pnl-icon"><i class="fa-solid fa-chart-line"></i></span>
+              </div>
+              <div class="stat-value" id="portfolio-pnl">₹0.00</div>
+              <div class="stat-foot"><span id="portfolio-pnl-pct" class="status-chip success-chip">+0.0%</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <span class="stat-label">Zerodha Holdings</span>
+                <span class="stat-icon orange-icon"><i class="fa-solid fa-bolt"></i></span>
+              </div>
+              <div class="stat-value" id="zerodha-holdings-val">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note" id="zerodha-holdings-count">0 stocks</span></div>
+            </article>
+          </div>
+
+          <!-- PORTFOLIO HOLDINGS TABLE -->
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Portfolio holdings</h2>
+                <p>Equities, ETFs, and mutual funds across your Demat and investment accounts.</p>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button class="outline-button small-button" id="refresh-investments-btn" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>INSTRUMENT</th>
+                    <th>SYMBOL</th>
+                    <th>DEMAT / BROKER</th>
+                    <th class="align-right">QTY</th>
+                    <th class="align-right">AVG BUY (₹)</th>
+                    <th class="align-right">LTP (₹)</th>
+                    <th class="align-right">MARKET VALUE</th>
+                    <th class="align-right">P&amp;L (₹ / %)</th>
+                    <th class="align-right">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody id="investments-table"></tbody>
+              </table>
+            </div>
+            <div id="investments-empty" class="empty-state" hidden>
+              <i class="fa-solid fa-chart-pie"></i>
+              <p>No investment holdings found. Click "Connect Zerodha Demat" or "Add Holding" to track your portfolio.</p>
+            </div>
+          </article>
         </section>
 
         <section class="screen" id="screen-reminders" hidden>
@@ -764,6 +866,178 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <p id="family-account-error" class="form-message error-text" role="status" aria-live="polite"></p>
         <footer>
           <button type="submit" id="family-account-submit" class="primary-button full-button"><i class="fa-solid fa-check"></i> Save &amp; Connect Account</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- ZERODHA DEMAT ACCOUNT MODAL -->
+  <dialog id="zerodha-modal" class="zerodha-modal">
+    <article class="zerodha-dialog-content">
+      <header>
+        <button aria-label="Close" rel="prev" id="zerodha-modal-close"></button>
+        <div class="zerodha-modal-header">
+          <span class="zerodha-kite-icon">K</span>
+          <div>
+            <h2>Connect Zerodha Demat</h2>
+            <p>Link your actual Zerodha Kite account and track your Indian equity holdings.</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- TAB BUTTONS -->
+      <div class="zerodha-tabs">
+        <button type="button" class="zerodha-tab-btn active" data-tab="tab-manual"><i class="fa-solid fa-id-card"></i> Client ID &amp; Stocks</button>
+        <button type="button" class="zerodha-tab-btn" data-tab="tab-csv"><i class="fa-solid fa-file-csv"></i> Console CSV Import</button>
+        <button type="button" class="zerodha-tab-btn" data-tab="tab-api"><i class="fa-solid fa-bolt"></i> Kite Connect API</button>
+      </div>
+
+      <!-- TAB 1: CLIENT ID & STOCKS -->
+      <div id="tab-manual" class="zerodha-tab-content">
+        <form id="zerodha-manual-form">
+          <div class="form-row-2">
+            <label>Zerodha Client ID
+              <input type="text" name="client_id" placeholder="e.g. SK0717 or AB1234" value="SK0717" required>
+            </label>
+            <label>16-digit Demat BOID (Optional)
+              <input type="text" name="demat_boid" placeholder="e.g. 1208160012345678" maxlength="16">
+            </label>
+          </div>
+
+          <div class="zerodha-stocks-section">
+            <div class="section-title-row">
+              <b>Zerodha Stock &amp; ETF Holdings</b>
+              <span class="tiny-note">Add your actual shares</span>
+            </div>
+
+            <!-- Quick presets -->
+            <div class="stock-preset-chips">
+              <span style="font-size:11px; color:#64748b; font-weight:600;">Quick add:</span>
+              <button type="button" class="stock-chip-add" data-sym="RELIANCE" data-name="Reliance Industries" data-buy="2840.50" data-ltp="2980.20">+ RELIANCE</button>
+              <button type="button" class="stock-chip-add" data-sym="TCS" data-name="Tata Consultancy Services" data-buy="3780.00" data-ltp="4120.00">+ TCS</button>
+              <button type="button" class="stock-chip-add" data-sym="INFY" data-name="Infosys Ltd" data-buy="1450.00" data-ltp="1860.00">+ INFY</button>
+              <button type="button" class="stock-chip-add" data-sym="HDFCBANK" data-name="HDFC Bank Ltd" data-buy="1510.00" data-ltp="1690.00">+ HDFCBANK</button>
+              <button type="button" class="stock-chip-add" data-sym="TATAMOTORS" data-name="Tata Motors Ltd" data-buy="820.00" data-ltp="965.50">+ TATAMOTORS</button>
+              <button type="button" class="stock-chip-add" data-sym="NIFTYBEES" data-name="Nippon Nifty 50 ETF" data-buy="230.00" data-ltp="262.50">+ NIFTYBEES</button>
+            </div>
+
+            <div id="zerodha-holdings-rows" class="stock-input-rows">
+              <div class="stock-row-header">
+                <span>SYMBOL</span>
+                <span>QTY</span>
+                <span>BUY PRICE (₹)</span>
+                <span>CURRENT LTP (₹)</span>
+                <span></span>
+              </div>
+              <div class="stock-row-item">
+                <input type="text" class="h-sym" placeholder="e.g. RELIANCE" value="RELIANCE" required>
+                <input type="number" class="h-qty" placeholder="Qty" value="25" min="1" step="any" required>
+                <input type="number" class="h-buy" placeholder="Buy Price" value="2840.50" step="0.01" required>
+                <input type="number" class="h-ltp" placeholder="Current Price" value="2980.20" step="0.01" required>
+                <button type="button" class="icon-button remove-stock-row" title="Remove"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </div>
+
+            <button type="button" class="outline-button small-button" id="add-another-stock-btn" style="margin-top:10px;">
+              <i class="fa-solid fa-plus"></i> Add another stock
+            </button>
+          </div>
+
+          <p id="zerodha-manual-error" class="form-message error-text" role="status" aria-live="polite"></p>
+          <footer style="margin-top:20px;">
+            <button type="submit" id="zerodha-manual-submit" class="primary-button full-button zerodha-btn">
+              <i class="fa-solid fa-check"></i> Connect Zerodha Demat &amp; Save Holdings
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <!-- TAB 2: CONSOLE CSV IMPORT -->
+      <div id="tab-csv" class="zerodha-tab-content" hidden>
+        <form id="zerodha-csv-form">
+          <p class="modal-sub">Upload the holdings CSV export from <b>Zerodha Console</b> (Console → Portfolio → Holdings → Download CSV) or paste its contents below.</p>
+          
+          <label class="file-drop-area" id="zerodha-file-drop">
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size:28px; color:#ff5722; margin-bottom:8px;"></i>
+            <b>Choose Zerodha CSV file or drag &amp; drop</b>
+            <small style="color:#64748b;">holdings.csv from Zerodha Console</small>
+            <input type="file" id="zerodha-csv-file" accept=".csv" style="display:none;">
+          </label>
+
+          <label style="margin-top:14px;">Or paste CSV content directly:
+            <textarea id="zerodha-csv-text" rows="5" placeholder="Instrument,Qty.,Avg. cost,LTP,Cur. val,P&amp;L&#10;RELIANCE,25,2840.50,2980.20,74505.00,3492.50&#10;INFY,50,1420.50,1850.75,92537.50,21512.50"></textarea>
+          </label>
+
+          <p id="zerodha-csv-error" class="form-message error-text" role="status" aria-live="polite"></p>
+          <footer>
+            <button type="submit" id="zerodha-csv-submit" class="primary-button full-button zerodha-btn">
+              <i class="fa-solid fa-file-import"></i> Parse &amp; Import Zerodha Holdings
+            </button>
+          </footer>
+        </form>
+      </div>
+
+      <!-- TAB 3: KITE CONNECT API -->
+      <div id="tab-api" class="zerodha-tab-content" hidden>
+        <form id="zerodha-api-form">
+          <p class="modal-sub">Direct sync via official <b>Zerodha Kite Connect API</b> (<a href="https://kite.trade" target="_blank" rel="noreferrer" style="color:#ff5722;">kite.trade</a>).</p>
+          <label>Kite API Key
+            <input type="text" name="api_key" placeholder="e.g. abcdef1234567890" required>
+          </label>
+          <label>Kite Access Token
+            <input type="password" name="access_token" placeholder="Generated daily access token" required>
+          </label>
+          <div class="auth-safety" style="margin-top:10px;">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>Your token is used directly with <code>api.kite.trade/portfolio/holdings</code> to pull your real portfolio into local MySQL.</span>
+          </div>
+
+          <p id="zerodha-api-error" class="form-message error-text" role="status" aria-live="polite"></p>
+          <footer>
+            <button type="submit" id="zerodha-api-submit" class="primary-button full-button zerodha-btn">
+              <i class="fa-solid fa-rotate"></i> Sync Live Holdings from Kite API
+            </button>
+          </footer>
+        </form>
+      </div>
+    </article>
+  </dialog>
+
+  <!-- ADD INDIVIDUAL HOLDING MODAL -->
+  <dialog id="add-holding-modal" class="family-account-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" id="add-holding-close"></button>
+        <h2><i class="fa-solid fa-chart-line"></i> Add Stock Holding</h2>
+      </header>
+      <form id="add-holding-form">
+        <p class="modal-sub">Add an Indian equity, ETF, or mutual fund holding to your portfolio.</p>
+        <label>Stock / Symbol
+          <input type="text" name="symbol" placeholder="e.g. RELIANCE, TCS, INFY, TATAMOTORS, NIFTYBEES" required>
+        </label>
+        <label>Company / Instrument Name
+          <input type="text" name="instrument" placeholder="e.g. Reliance Industries Ltd (Optional)">
+        </label>
+        <div class="form-row-2">
+          <label>Quantity (Shares/Units)
+            <input type="number" step="any" name="units" placeholder="e.g. 25" required>
+          </label>
+          <label>Average Buy Price (₹)
+            <input type="number" step="0.01" name="buy_price" placeholder="e.g. 2840.50" required>
+          </label>
+        </div>
+        <label>Current Market Price / LTP (₹)
+          <input type="number" step="0.01" name="price" placeholder="e.g. 2980.20" required>
+        </label>
+        <label>Demat Account / Broker
+          <select name="broker_select" id="holding-broker-select">
+            <option value="zerodha">Zerodha Demat (Kite)</option>
+            <option value="other">Default Portfolio</option>
+          </select>
+        </label>
+        <p id="add-holding-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" class="primary-button full-button"><i class="fa-solid fa-plus"></i> Add to Portfolio</button>
         </footer>
       </form>
     </article>

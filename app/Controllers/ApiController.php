@@ -163,6 +163,96 @@ final class ApiController
         if ($path === '/api/investments' && $method === 'GET') {
             Http::json(['data' => $this->finance->holdings($userId)]);
         }
+        if ($path === '/api/zerodha' && $method === 'GET') {
+            Http::json(['data' => $this->finance->zerodhaAccount($userId)]);
+        }
+        if ($path === '/api/zerodha/connect' && $method === 'POST') {
+            $body = Http::body();
+            $clientId = trim((string)($body['client_id'] ?? ''));
+            $dematBoid = trim((string)($body['demat_boid'] ?? ''));
+            if ($clientId === '' && $dematBoid === '') {
+                Http::error('Enter your Zerodha Client ID or Demat BO ID.');
+            }
+            $accountId = $this->finance->connectZerodhaDemat($userId, $clientId ?: $dematBoid, $dematBoid ?: null);
+
+            if (!empty($body['holdings']) && is_array($body['holdings'])) {
+                $this->finance->importZerodhaHoldings($userId, $accountId, $body['holdings'], false);
+            }
+
+            $this->audit($userId, 'zerodha.connected', 'financial_account', $accountId);
+            Http::json(['data' => $this->finance->zerodhaAccount($userId)], 201);
+        }
+        if ($path === '/api/zerodha/import-csv' && $method === 'POST') {
+            $body = Http::body();
+            $csv = (string)($body['csv'] ?? '');
+            $accountId = (int)($body['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                $zerodha = $this->finance->zerodhaAccount($userId);
+                $accountId = $zerodha ? (int)$zerodha['account']['id'] : $this->finance->connectZerodhaDemat($userId, 'Kite User');
+            }
+            if (trim($csv) === '') {
+                Http::error('No CSV content provided for import.');
+            }
+            $parsed = $this->finance->parseZerodhaCsv($csv);
+            if (empty($parsed)) {
+                Http::error('No valid stock holdings found in CSV. Confirm column headers (Instrument/Symbol, Qty, Price).');
+            }
+            $count = $this->finance->importZerodhaHoldings($userId, $accountId, $parsed, true);
+            $this->audit($userId, 'zerodha.csv_imported', 'financial_account', $accountId);
+            Http::json(['data' => ['imported_count' => $count, 'zerodha' => $this->finance->zerodhaAccount($userId)]]);
+        }
+        if ($path === '/api/zerodha/sync-kite' && $method === 'POST') {
+            $body = Http::body();
+            $apiKey = trim((string)($body['api_key'] ?? ''));
+            $accessToken = trim((string)($body['access_token'] ?? ''));
+            $accountId = (int)($body['account_id'] ?? 0);
+            if ($apiKey === '' || $accessToken === '') {
+                Http::error('Enter both Zerodha Kite API Key and Access Token.');
+            }
+            if ($accountId <= 0) {
+                $zerodha = $this->finance->zerodhaAccount($userId);
+                $accountId = $zerodha ? (int)$zerodha['account']['id'] : $this->finance->connectZerodhaDemat($userId, 'Kite User');
+            }
+            try {
+                $res = $this->finance->syncZerodhaKiteApi($userId, $accountId, $apiKey, $accessToken);
+                $this->audit($userId, 'zerodha.kite_synced', 'financial_account', $accountId);
+                Http::json(['data' => ['imported_count' => $res['imported_count'], 'zerodha' => $this->finance->zerodhaAccount($userId)]]);
+            } catch (\Throwable $e) {
+                Http::error($e->getMessage(), 'kite_api_error', 400);
+            }
+        }
+        if ($path === '/api/zerodha/holding' && $method === 'POST') {
+            $body = Http::body();
+            $accountId = (int)($body['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                $zerodha = $this->finance->zerodhaAccount($userId);
+                $accountId = $zerodha ? (int)$zerodha['account']['id'] : $this->finance->connectZerodhaDemat($userId, 'Kite User');
+            }
+            $symbol = strtoupper(trim((string)($body['symbol'] ?? '')));
+            $instrument = trim((string)($body['instrument'] ?? $symbol));
+            $units = (float)($body['units'] ?? 0);
+            $buyPrice = (float)($body['buy_price'] ?? 0);
+            $price = (float)($body['price'] ?? $buyPrice);
+            if ($symbol === '' || $units <= 0) {
+                Http::error('Enter a valid stock symbol and quantity.');
+            }
+            $holding = [
+                'symbol' => $symbol,
+                'instrument' => $instrument ?: $symbol,
+                'units' => $units,
+                'buy_price' => $buyPrice,
+                'price' => $price,
+            ];
+            $this->finance->importZerodhaHoldings($userId, $accountId, [$holding], false);
+            Http::json(['data' => $this->finance->zerodhaAccount($userId)], 201);
+        }
+        if (preg_match('#^/api/holdings/(\d+)$#', $path, $match) && $method === 'DELETE') {
+            $deleted = $this->finance->deleteHolding($userId, (int)$match[1]);
+            if (!$deleted) {
+                Http::error('Holding not found.', 'not_found', 404);
+            }
+            Http::json(['data' => ['deleted' => true, 'holdings' => $this->finance->holdings($userId)]]);
+        }
         if ($path === '/api/family-overview' && $method === 'GET') {
             Http::json(['data' => $this->finance->familyOverview($userId)]);
         }

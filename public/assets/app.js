@@ -2,7 +2,7 @@
   'use strict';
 
   const base = window.FINSYNC_BASE || '';
-  const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], familyOverview: null, selectedFamilyMemberId: null, transactions: [], investments: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
+  const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], familyOverview: null, selectedFamilyMemberId: null, investments: [], zerodha: null, transactions: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value) || 0);
@@ -783,10 +783,133 @@
   }
 
   async function loadInvestments() {
-    state.investments = await api('/api/investments');
-    const total = state.investments.reduce((sum, item) => sum + Number(item.market_value), 0);
-    $('#holdings-total').textContent = money(total);
-    $('#investments-table').innerHTML = state.investments.map((item) => `<tr><td><b>${esc(item.instrument)}</b><small class="table-sub">${esc(item.institution)}</small></td><td><span class="symbol-chip">${esc(item.symbol)}</span></td><td>${Number(item.units).toFixed(3)}</td><td>${money(item.price)}</td><td class="align-right"><b>${money(item.market_value)}</b></td></tr>`).join('');
+    const [holdings, zerodhaData] = await Promise.all([
+      api('/api/investments'),
+      api('/api/zerodha').catch(() => null),
+    ]);
+    state.investments = holdings || [];
+    state.zerodha = zerodhaData;
+
+    let totalVal = 0;
+    let totalInvested = 0;
+    let zerodhaVal = 0;
+    let zerodhaCount = 0;
+
+    state.investments.forEach((h) => {
+      const val = Number(h.market_value) || 0;
+      const units = Number(h.units) || 0;
+      const buyP = Number(h.buy_price) || 0;
+      const cost = buyP > 0 ? buyP * units : val;
+
+      totalVal += val;
+      totalInvested += cost;
+
+      if (h.provider_key === 'zerodha_kite' || (h.institution && h.institution.includes('Zerodha'))) {
+        zerodhaVal += val;
+        zerodhaCount++;
+      }
+    });
+
+    const totalPnl = totalVal - totalInvested;
+    const pnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+    if ($('#holdings-total')) $('#holdings-total').textContent = money(totalVal);
+    if ($('#portfolio-invested')) $('#portfolio-invested').textContent = money(totalInvested);
+    if ($('#portfolio-pnl')) {
+      $('#portfolio-pnl').textContent = `${totalPnl >= 0 ? '+' : ''}${money(totalPnl)}`;
+      $('#portfolio-pnl').classList.toggle('amount-expense', totalPnl < 0);
+      $('#portfolio-pnl').classList.toggle('amount-income', totalPnl >= 0);
+    }
+    if ($('#portfolio-pnl-pct')) {
+      $('#portfolio-pnl-pct').textContent = `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`;
+      $('#portfolio-pnl-pct').className = `status-chip ${totalPnl >= 0 ? 'success-chip' : 'danger-chip'}`;
+    }
+    if ($('#holdings-count-note')) $('#holdings-count-note').textContent = `${state.investments.length} instruments tracked`;
+    if ($('#zerodha-holdings-val')) $('#zerodha-holdings-val').textContent = money(zerodhaVal);
+    if ($('#zerodha-holdings-count')) $('#zerodha-holdings-count').textContent = `${zerodhaCount} Zerodha Demat shares`;
+
+    // Update Zerodha Status Card
+    const zTitle = $('#zerodha-card-title');
+    const zSub = $('#zerodha-card-sub');
+    const zDetails = $('#zerodha-connected-details');
+    const zActions = $('#zerodha-actions-container');
+
+    if (zerodhaData && zerodhaData.account) {
+      const acc = zerodhaData.account;
+      if (zTitle) zTitle.innerHTML = '<span class="status-chip success-chip" style="margin-right:8px;"><i class="fa-solid fa-check"></i> Connected</span> Zerodha Broking Ltd (Kite)';
+      if (zSub) zSub.textContent = `Actual Demat Account linked (${acc.masked_number || 'Kite Account'}). Real-time portfolio tracking active.`;
+      if (zDetails) {
+        zDetails.hidden = false;
+        if ($('#zerodha-client-display')) $('#zerodha-client-display').textContent = acc.client_id || 'Active User';
+        if ($('#zerodha-synced-at')) $('#zerodha-synced-at').textContent = acc.last_synced_at ? dateLabel(acc.last_synced_at.slice(0, 10)) : 'Live';
+      }
+      if (zActions) {
+        zActions.innerHTML = `
+          <button class="outline-button small-button" id="quick-add-stock-btn" type="button"><i class="fa-solid fa-plus"></i> Add Stock</button>
+          <button class="outline-button small-button open-zerodha-dialog" data-tab="tab-csv" type="button"><i class="fa-solid fa-file-csv"></i> Import CSV</button>
+          <button class="outline-button small-button open-zerodha-dialog" data-tab="tab-api" type="button"><i class="fa-solid fa-bolt"></i> Kite Sync</button>
+          <button class="primary-button small-button open-zerodha-dialog" data-tab="tab-manual" type="button"><i class="fa-solid fa-sliders"></i> Manage</button>
+        `;
+      }
+    } else {
+      if (zTitle) zTitle.textContent = 'Connect Zerodha Demat Account';
+      if (zSub) zSub.textContent = 'Link your actual Zerodha Kite Demat account to track your Indian stocks, ETFs & mutual funds in Rupees (₹).';
+      if (zDetails) zDetails.hidden = true;
+      if (zActions) {
+        zActions.innerHTML = `<button class="primary-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha Demat</button>`;
+      }
+    }
+
+    // Render Holdings Table
+    const emptyEl = $('#investments-empty');
+    if (emptyEl) emptyEl.hidden = state.investments.length > 0;
+
+    $('#investments-table').innerHTML = state.investments.map((item) => {
+      const val = Number(item.market_value) || 0;
+      const units = Number(item.units) || 0;
+      const buyP = Number(item.buy_price) || 0;
+      const ltp = Number(item.price) || 0;
+      const pnl = item.pnl !== null && item.pnl !== undefined ? Number(item.pnl) : (val - (buyP * units));
+      const pnlPct = (buyP * units) > 0 ? (pnl / (buyP * units)) * 100 : 0;
+      const isZerodha = item.provider_key === 'zerodha_kite' || (item.institution && item.institution.includes('Zerodha'));
+
+      const pnlClass = pnl >= 0 ? 'amount-income' : 'amount-expense';
+
+      return `
+        <tr>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="stock-avatar-mini">${esc(item.symbol ? item.symbol.slice(0, 2) : 'EQ')}</span>
+              <div>
+                <b>${esc(item.instrument || item.symbol)}</b>
+                <small style="display:block; color:#64748b; font-size:10px;">${isZerodha ? 'NSE/BSE Demat Equity' : 'Synthetic Holding'}</small>
+              </div>
+            </div>
+          </td>
+          <td><span class="symbol-chip">${esc(item.symbol)}</span></td>
+          <td>
+            <span class="${isZerodha ? 'zerodha-broker-pill' : 'type-chip'}">
+              ${isZerodha ? '<i class="fa-solid fa-bolt" style="color:#ff5722;"></i> Zerodha' : esc(item.institution)}
+            </span>
+          </td>
+          <td class="align-right"><b>${units.toFixed(units % 1 === 0 ? 0 : 3)}</b></td>
+          <td class="align-right">${buyP > 0 ? money(buyP) : '—'}</td>
+          <td class="align-right"><b>${money(ltp)}</b></td>
+          <td class="align-right"><b>${money(val)}</b></td>
+          <td class="align-right">
+            <span class="${pnlClass}" style="font-weight:700;">
+              ${pnl >= 0 ? '+' : ''}${money(pnl)}
+              <small style="font-size:10.5px; opacity:0.9;">(${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)</small>
+            </span>
+          </td>
+          <td class="align-right">
+            <button class="icon-button delete-holding-btn" data-id="${Number(item.id)}" title="Remove holding" style="color:#ef4444;">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   async function loadReminders() {
@@ -995,6 +1118,25 @@
         await openFamilyMemberDashboard(memberId);
         return;
       }
+    }
+    const openZerodha = event.target.closest('.open-zerodha-dialog');
+    if (openZerodha) {
+      openZerodhaModal(openZerodha.dataset.tab || 'tab-manual');
+      return;
+    }
+    const deleteHolding = event.target.closest('.delete-holding-btn');
+    if (deleteHolding && window.confirm('Remove this holding from your portfolio?')) {
+      try {
+        await api(`/api/holdings/${Number(deleteHolding.dataset.id)}`, { method: 'DELETE', body: {} });
+        await loadInvestments();
+        toast('Holding removed.');
+      } catch (err) { handleError(err); }
+      return;
+    }
+    const removeStock = event.target.closest('.remove-stock-row');
+    if (removeStock) {
+      removeStock.closest('.stock-row-item')?.remove();
+      return;
     }
     const simulate = event.target.closest('.simulate-payment');
     if (simulate) { await createPayment(simulate.dataset.id); return; }
@@ -1264,6 +1406,201 @@
       await handleGoogleLogin({ name, email });
     } finally {
       if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // --- ZERODHA DEMAT & HOLDINGS INTEGRATION ---
+  function openZerodhaModal(targetTab = 'tab-manual') {
+    const dialog = $('#zerodha-modal');
+    if (!dialog) return;
+    switchZerodhaTab(targetTab);
+    const errM = $('#zerodha-manual-error');
+    const errC = $('#zerodha-csv-error');
+    const errA = $('#zerodha-api-error');
+    if (errM) errM.textContent = '';
+    if (errC) errC.textContent = '';
+    if (errA) errA.textContent = '';
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    }
+  }
+
+  function switchZerodhaTab(tabId) {
+    $$('.zerodha-tab-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    $$('.zerodha-tab-content').forEach((content) => {
+      content.hidden = (content.id !== tabId);
+    });
+  }
+
+  $$('.zerodha-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchZerodhaTab(btn.dataset.tab));
+  });
+
+  $('#connect-zerodha-btn')?.addEventListener('click', () => openZerodhaModal('tab-manual'));
+  $('#zerodha-modal-close')?.addEventListener('click', () => $('#zerodha-modal')?.close());
+  $('#refresh-investments-btn')?.addEventListener('click', () => loadInvestments().then(() => toast('Portfolio updated.')));
+
+  // Preset stock chips click
+  $$('.stock-chip-add').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sym = btn.dataset.sym;
+      const buy = btn.dataset.buy;
+      const ltp = btn.dataset.ltp;
+      const container = $('#zerodha-holdings-rows');
+      if (!container) return;
+      const row = document.createElement('div');
+      row.className = 'stock-row-item';
+      row.innerHTML = `
+        <input type="text" class="h-sym" placeholder="Symbol" value="${esc(sym)}" required>
+        <input type="number" class="h-qty" placeholder="Qty" value="10" min="1" step="any" required>
+        <input type="number" class="h-buy" placeholder="Buy Price" value="${esc(buy)}" step="0.01" required>
+        <input type="number" class="h-ltp" placeholder="Current Price" value="${esc(ltp)}" step="0.01" required>
+        <button type="button" class="icon-button remove-stock-row" title="Remove"><i class="fa-solid fa-trash"></i></button>
+      `;
+      container.appendChild(row);
+      toast(`Added ${sym} to list`);
+    });
+  });
+
+  $('#add-another-stock-btn')?.addEventListener('click', () => {
+    const container = $('#zerodha-holdings-rows');
+    if (!container) return;
+    const row = document.createElement('div');
+    row.className = 'stock-row-item';
+    row.innerHTML = `
+      <input type="text" class="h-sym" placeholder="Symbol" required>
+      <input type="number" class="h-qty" placeholder="Qty" value="1" min="1" step="any" required>
+      <input type="number" class="h-buy" placeholder="Buy Price" value="0.00" step="0.01" required>
+      <input type="number" class="h-ltp" placeholder="Current Price" value="0.00" step="0.01" required>
+      <button type="button" class="icon-button remove-stock-row" title="Remove"><i class="fa-solid fa-trash"></i></button>
+    `;
+    container.appendChild(row);
+  });
+
+  // Manual Zerodha form submit
+  $('#zerodha-manual-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const clientId = (form.client_id?.value || '').trim();
+    const dematBoid = (form.demat_boid?.value || '').trim();
+    const submitBtn = $('#zerodha-manual-submit');
+    const errEl = $('#zerodha-manual-error');
+    if (errEl) errEl.textContent = '';
+
+    const rows = $$('.stock-row-item', form);
+    const holdings = [];
+    rows.forEach((r) => {
+      const sym = r.querySelector('.h-sym')?.value.trim().toUpperCase();
+      const qty = parseFloat(r.querySelector('.h-qty')?.value) || 0;
+      const buy = parseFloat(r.querySelector('.h-buy')?.value) || 0;
+      const ltp = parseFloat(r.querySelector('.h-ltp')?.value) || buy;
+      if (sym && qty > 0) {
+        holdings.push({ symbol: sym, instrument: sym, units: qty, buy_price: buy, price: ltp });
+      }
+    });
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await api('/api/zerodha/connect', { method: 'POST', body: { client_id: clientId, demat_boid: dematBoid, holdings } });
+      $('#zerodha-modal')?.close();
+      toast('Zerodha Demat account connected!');
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Failed to connect Zerodha Demat.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // CSV file drag & upload
+  $('#zerodha-csv-file')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const txtArea = $('#zerodha-csv-text');
+      if (txtArea) txtArea.value = evt.target.result;
+      toast(`Loaded ${file.name}`);
+    };
+    reader.readAsText(file);
+  });
+
+  $('#zerodha-csv-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const csv = ($('#zerodha-csv-text')?.value || '').trim();
+    const errEl = $('#zerodha-csv-error');
+    if (errEl) errEl.textContent = '';
+    const submitBtn = $('#zerodha-csv-submit');
+    if (!csv) {
+      if (errEl) errEl.textContent = 'Please select a CSV file or paste CSV text.';
+      return;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await api('/api/zerodha/import-csv', { method: 'POST', body: { csv } });
+      $('#zerodha-modal')?.close();
+      toast(`Imported ${res.imported_count} Zerodha holdings from CSV!`);
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Failed to parse CSV.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Kite API form submit
+  $('#zerodha-api-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const apiKey = (form.api_key?.value || '').trim();
+    const accessToken = (form.access_token?.value || '').trim();
+    const errEl = $('#zerodha-api-error');
+    if (errEl) errEl.textContent = '';
+    const submitBtn = $('#zerodha-api-submit');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await api('/api/zerodha/sync-kite', { method: 'POST', body: { api_key: apiKey, access_token: accessToken } });
+      $('#zerodha-modal')?.close();
+      toast(`Synced ${res.imported_count} live holdings from Zerodha Kite!`);
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Kite API sync failed.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Add individual stock holding modal
+  $('#add-holding-btn')?.addEventListener('click', () => {
+    const errEl = $('#add-holding-error');
+    if (errEl) errEl.textContent = '';
+    $('#add-holding-form')?.reset();
+    $('#add-holding-modal')?.showModal();
+  });
+  $('#add-holding-close')?.addEventListener('click', () => $('#add-holding-modal')?.close());
+
+  $('#add-holding-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const symbol = (form.symbol?.value || '').trim().toUpperCase();
+    const instrument = (form.instrument?.value || '').trim();
+    const units = parseFloat(form.units?.value) || 0;
+    const buyPrice = parseFloat(form.buy_price?.value) || 0;
+    const price = parseFloat(form.price?.value) || buyPrice;
+    const errEl = $('#add-holding-error');
+    if (errEl) errEl.textContent = '';
+    try {
+      await api('/api/zerodha/holding', {
+        method: 'POST',
+        body: { symbol, instrument, units, buy_price: buyPrice, price }
+      });
+      $('#add-holding-modal')?.close();
+      toast(`Added ${symbol} to portfolio!`);
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not add holding.';
     }
   });
 

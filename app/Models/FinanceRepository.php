@@ -362,14 +362,315 @@ final class FinanceRepository
     public function holdings(int $userId): array
     {
         $statement = $this->db->prepare(
-            'SELECT h.id, h.instrument, h.symbol, h.units, h.price, h.market_value, h.valuation_date, '
-            . 'a.institution, a.masked_number FROM investment_holdings h '
+            'SELECT h.id, h.account_id, h.instrument, h.symbol, h.units, h.price, h.buy_price, h.market_value, h.pnl, h.valuation_date, '
+            . 'a.institution, a.masked_number, a.provider_key, a.client_id, m.name AS member_name FROM investment_holdings h '
             . 'JOIN financial_accounts a ON a.id = h.account_id AND a.user_id = h.user_id '
             . 'JOIN family_members m ON m.id = a.family_member_id AND m.user_id = a.user_id AND m.status = "active" '
             . 'WHERE h.user_id = :user_id ORDER BY h.market_value DESC'
         );
         $statement->execute(['user_id' => $userId]);
         return $statement->fetchAll();
+    }
+
+    public function zerodhaAccount(int $userId): ?array
+    {
+        $statement = $this->db->prepare(
+            'SELECT id, institution, account_type, masked_number, client_id, balance, currency, last_synced_at, provider_key '
+            . 'FROM financial_accounts WHERE user_id = :user_id AND provider_key = "zerodha_kite" AND status = "active" LIMIT 1'
+        );
+        $statement->execute(['user_id' => $userId]);
+        $acc = $statement->fetch();
+        if (!$acc) {
+            return null;
+        }
+
+        $holdingsStmt = $this->db->prepare(
+            'SELECT id, instrument, symbol, units, price, buy_price, market_value, pnl, valuation_date '
+            . 'FROM investment_holdings WHERE account_id = :account_id AND user_id = :user_id ORDER BY market_value DESC'
+        );
+        $holdingsStmt->execute(['account_id' => $acc['id'], 'user_id' => $userId]);
+        $holdings = $holdingsStmt->fetchAll();
+
+        $totalInvestment = 0.0;
+        $totalMarketValue = 0.0;
+        foreach ($holdings as $h) {
+            $buyP = (float)$h['buy_price'];
+            $units = (float)$h['units'];
+            $cost = $buyP > 0 ? $buyP * $units : (float)$h['market_value'];
+            $totalInvestment += $cost;
+            $totalMarketValue += (float)$h['market_value'];
+        }
+
+        $totalPnl = $totalMarketValue - $totalInvestment;
+        $pnlPercentage = $totalInvestment > 0 ? ($totalPnl / $totalInvestment) * 100 : 0.0;
+
+        return [
+            'account' => $acc,
+            'holdings' => $holdings,
+            'summary' => [
+                'total_holdings_count' => count($holdings),
+                'total_investment' => round($totalInvestment, 2),
+                'total_market_value' => round($totalMarketValue, 2),
+                'total_pnl' => round($totalPnl, 2),
+                'pnl_percentage' => round($pnlPercentage, 2),
+            ],
+        ];
+    }
+
+    public function getOrCreateSelfMember(int $userId): int
+    {
+        $stmt = $this->db->prepare('SELECT id FROM family_members WHERE user_id = :user_id AND relationship = "Self" AND status = "active" LIMIT 1');
+        $stmt->execute(['user_id' => $userId]);
+        $id = $stmt->fetchColumn();
+        if ($id) {
+            return (int)$id;
+        }
+
+        $stmtAny = $this->db->prepare('SELECT id FROM family_members WHERE user_id = :user_id AND status = "active" ORDER BY id ASC LIMIT 1');
+        $stmtAny->execute(['user_id' => $userId]);
+        $anyId = $stmtAny->fetchColumn();
+        if ($anyId) {
+            return (int)$anyId;
+        }
+
+        $userStmt = $this->db->prepare('SELECT name FROM users WHERE id = :user_id');
+        $userStmt->execute(['user_id' => $userId]);
+        $userName = $userStmt->fetchColumn() ?: 'Sharath Kumar';
+
+        $ins = $this->db->prepare('INSERT INTO family_members (user_id, name, relationship, status) VALUES (:user_id, :name, "Self", "active")');
+        $ins->execute(['user_id' => $userId, 'name' => $userName]);
+        return (int)$this->db->lastInsertId();
+    }
+
+    public function connectZerodhaDemat(int $userId, string $clientId, ?string $dematBoid = null): int
+    {
+        $selfMemberId = $this->getOrCreateSelfMember($userId);
+        $clientId = trim($clientId);
+        if ($clientId === '') {
+            $clientId = 'DEMAT-' . random_int(100000, 999999);
+        }
+        $maskedNumber = $dematBoid && strlen($dematBoid) >= 4 ? 'BOID •••• ' . substr(preg_replace('/\D/', '', $dematBoid), -4) : 'Kite •••• ' . substr($clientId, -4);
+
+        $check = $this->db->prepare('SELECT id FROM financial_accounts WHERE user_id = :user_id AND provider_key = "zerodha_kite"');
+        $check->execute(['user_id' => $userId]);
+        $existingId = $check->fetchColumn();
+
+        if ($existingId) {
+            $up = $this->db->prepare(
+                'UPDATE financial_accounts SET client_id = :client_id, masked_number = :masked, institution = "Zerodha Broking Ltd (Kite)", '
+                . 'last_synced_at = NOW(), status = "active" WHERE id = :id'
+            );
+            $up->execute(['client_id' => $clientId, 'masked' => $maskedNumber, 'id' => (int)$existingId]);
+            return (int)$existingId;
+        }
+
+        $ins = $this->db->prepare(
+            'INSERT INTO financial_accounts (user_id, family_member_id, provider_key, institution, account_type, masked_number, client_id, balance, currency, status, last_synced_at, is_demo) '
+            . 'VALUES (:user_id, :member_id, "zerodha_kite", "Zerodha Broking Ltd (Kite)", "investment", :masked, :client_id, 0.00, "INR", "active", NOW(), 0)'
+        );
+        $ins->execute([
+            'user_id' => $userId,
+            'member_id' => $selfMemberId,
+            'masked' => $maskedNumber,
+            'client_id' => $clientId,
+        ]);
+        return (int)$this->db->lastInsertId();
+    }
+
+    public function importZerodhaHoldings(int $userId, int $accountId, array $holdingsList, bool $replaceExisting = false): int
+    {
+        $chk = $this->db->prepare('SELECT id FROM financial_accounts WHERE id = :id AND user_id = :user_id');
+        $chk->execute(['id' => $accountId, 'user_id' => $userId]);
+        if (!$chk->fetchColumn()) {
+            throw new \InvalidArgumentException('Demat account not found.');
+        }
+
+        $this->db->beginTransaction();
+        try {
+            if ($replaceExisting) {
+                $del = $this->db->prepare('DELETE FROM investment_holdings WHERE account_id = :account_id AND user_id = :user_id');
+                $del->execute(['account_id' => $accountId, 'user_id' => $userId]);
+            }
+
+            $ins = $this->db->prepare(
+                'INSERT INTO investment_holdings (user_id, account_id, instrument, symbol, units, price, buy_price, market_value, pnl, valuation_date) '
+                . 'VALUES (:user_id, :account_id, :instrument, :symbol, :units, :price, :buy_price, :market_value, :pnl, CURRENT_DATE)'
+            );
+
+            $importedCount = 0;
+            foreach ($holdingsList as $item) {
+                $symbol = strtoupper(trim((string)($item['symbol'] ?? '')));
+                if ($symbol === '') continue;
+                $instrument = trim((string)($item['instrument'] ?? $symbol));
+                $units = (float)($item['units'] ?? 0);
+                if ($units <= 0) continue;
+                $buyPrice = (float)($item['buy_price'] ?? ($item['price'] ?? 0));
+                $price = (float)($item['price'] ?? $buyPrice);
+                $marketValue = round($units * $price, 2);
+                $pnl = isset($item['pnl']) ? (float)$item['pnl'] : round($marketValue - ($units * $buyPrice), 2);
+
+                $ins->execute([
+                    'user_id' => $userId,
+                    'account_id' => $accountId,
+                    'instrument' => $instrument,
+                    'symbol' => $symbol,
+                    'units' => $units,
+                    'price' => $price,
+                    'buy_price' => $buyPrice,
+                    'market_value' => $marketValue,
+                    'pnl' => $pnl,
+                ]);
+                $importedCount++;
+            }
+
+            $totalValStmt = $this->db->prepare('SELECT COALESCE(SUM(market_value), 0) FROM investment_holdings WHERE account_id = :account_id AND user_id = :user_id');
+            $totalValStmt->execute(['account_id' => $accountId, 'user_id' => $userId]);
+            $totalVal = (float)$totalValStmt->fetchColumn();
+
+            $upAcc = $this->db->prepare('UPDATE financial_accounts SET balance = :balance, last_synced_at = NOW() WHERE id = :id');
+            $upAcc->execute(['balance' => $totalVal, 'id' => $accountId]);
+
+            $this->db->commit();
+            return $importedCount;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    public function parseZerodhaCsv(string $csvContent): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', trim($csvContent));
+        if (empty($lines)) {
+            return [];
+        }
+
+        $header = null;
+        $holdings = [];
+
+        foreach ($lines as $line) {
+            $row = str_getcsv($line);
+            if (empty($row) || count(array_filter($row)) === 0) continue;
+
+            if ($header === null) {
+                $norm = array_map(static fn($c) => strtolower(trim((string)$c)), $row);
+                $symIdx = null;
+                $qtyIdx = null;
+                $avgIdx = null;
+                $ltpIdx = null;
+
+                foreach ($norm as $idx => $col) {
+                    if (in_array($col, ['instrument', 'symbol', 'tradingsymbol', 'stock'], true)) {
+                        $symIdx = $idx;
+                    } elseif (in_array($col, ['qty.', 'qty', 'quantity', 'units'], true)) {
+                        $qtyIdx = $idx;
+                    } elseif (str_contains($col, 'avg') || str_contains($col, 'buy') || str_contains($col, 'cost')) {
+                        $avgIdx = $idx;
+                    } elseif (in_array($col, ['ltp', 'price', 'last price', 'current price'], true)) {
+                        $ltpIdx = $idx;
+                    }
+                }
+
+                if ($symIdx !== null && $qtyIdx !== null) {
+                    $header = ['sym' => $symIdx, 'qty' => $qtyIdx, 'avg' => $avgIdx, 'ltp' => $ltpIdx];
+                }
+                continue;
+            }
+
+            $symbol = strtoupper(trim((string)($row[$header['sym']] ?? '')));
+            if ($symbol === '' || str_starts_with($symbol, 'TOTAL') || str_starts_with($symbol, 'DISCLAIMER')) continue;
+
+            $qty = (float)preg_replace('/[^\d.]/', '', (string)($row[$header['qty']] ?? 0));
+            if ($qty <= 0) continue;
+
+            $avg = $header['avg'] !== null ? (float)preg_replace('/[^\d.]/', '', (string)($row[$header['avg']] ?? 0)) : 0;
+            $ltp = $header['ltp'] !== null ? (float)preg_replace('/[^\d.]/', '', (string)($row[$header['ltp']] ?? 0)) : $avg;
+            if ($ltp <= 0) $ltp = $avg;
+
+            $holdings[] = [
+                'instrument' => $symbol,
+                'symbol' => $symbol,
+                'units' => $qty,
+                'buy_price' => $avg,
+                'price' => $ltp,
+                'market_value' => round($qty * $ltp, 2),
+                'pnl' => round(($ltp - $avg) * $qty, 2),
+            ];
+        }
+
+        return $holdings;
+    }
+
+    public function syncZerodhaKiteApi(int $userId, int $accountId, string $apiKey, string $accessToken): array
+    {
+        $ch = curl_init('https://api.kite.trade/portfolio/holdings');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: token ' . trim($apiKey) . ':' . trim($accessToken),
+            'X-Kite-Version: 3'
+        ]);
+        $res = curl_exec($ch);
+        $err = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($err) {
+            throw new \RuntimeException('Failed to connect to Zerodha Kite API: ' . $err);
+        }
+
+        $json = json_decode((string)$res, true);
+        if ($status !== 200 || !is_array($json) || ($json['status'] ?? '') !== 'success') {
+            $msg = $json['message'] ?? 'Zerodha Kite API returned error code ' . $status;
+            throw new \RuntimeException($msg);
+        }
+
+        $kiteData = $json['data'] ?? [];
+        $parsed = [];
+        foreach ($kiteData as $item) {
+            $sym = strtoupper((string)($item['tradingsymbol'] ?? ''));
+            $qty = (float)($item['quantity'] ?? 0);
+            $avg = (float)($item['average_price'] ?? 0);
+            $ltp = (float)($item['last_price'] ?? $avg);
+            $pnl = (float)($item['pnl'] ?? (($ltp - $avg) * $qty));
+            $parsed[] = [
+                'instrument' => $sym,
+                'symbol' => $sym,
+                'units' => $qty,
+                'buy_price' => $avg,
+                'price' => $ltp,
+                'market_value' => round($qty * $ltp, 2),
+                'pnl' => $pnl,
+            ];
+        }
+
+        $imported = $this->importZerodhaHoldings($userId, $accountId, $parsed, true);
+        return [
+            'imported_count' => $imported,
+            'holdings' => $parsed,
+        ];
+    }
+
+    public function deleteHolding(int $userId, int $holdingId): bool
+    {
+        $stmt = $this->db->prepare('SELECT account_id FROM investment_holdings WHERE id = :id AND user_id = :user_id');
+        $stmt->execute(['id' => $holdingId, 'user_id' => $userId]);
+        $accountId = $stmt->fetchColumn();
+        if (!$accountId) {
+            return false;
+        }
+
+        $del = $this->db->prepare('DELETE FROM investment_holdings WHERE id = :id AND user_id = :user_id');
+        $del->execute(['id' => $holdingId, 'user_id' => $userId]);
+
+        $totalValStmt = $this->db->prepare('SELECT COALESCE(SUM(market_value), 0) FROM investment_holdings WHERE account_id = :account_id AND user_id = :user_id');
+        $totalValStmt->execute(['account_id' => $accountId, 'user_id' => $userId]);
+        $totalVal = (float)$totalValStmt->fetchColumn();
+
+        $upAcc = $this->db->prepare('UPDATE financial_accounts SET balance = :balance, last_synced_at = NOW() WHERE id = :id');
+        $upAcc->execute(['balance' => $totalVal, 'id' => $accountId]);
+
+        return true;
     }
 
     public function recurring(int $userId): array
