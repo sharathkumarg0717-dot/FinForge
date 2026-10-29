@@ -37,7 +37,7 @@ final class ApiController
             $user = null;
             $granted = false;
             if ($id !== null) {
-                $statement = $this->db->prepare('SELECT id, name, email FROM users WHERE id = :id AND status = "active" LIMIT 1');
+                $statement = $this->db->prepare('SELECT id, name, email, avatar_url, auth_provider FROM users WHERE id = :id AND status = "active" LIMIT 1');
                 $statement->execute(['id' => $id]);
                 $user = $statement->fetch() ?: null;
                 if ($user === null) {
@@ -48,7 +48,13 @@ final class ApiController
             }
             Http::json(['data' => [
                 'authenticated' => $user !== null,
-                'user' => $user ? ['id' => (int)$user['id'], 'name' => $user['name'], 'email' => $user['email']] : null,
+                'user' => $user ? [
+                    'id' => (int)$user['id'],
+                    'name' => $user['name'],
+                    'email' => $user['email'],
+                    'avatar' => $user['avatar_url'] ?? null,
+                    'auth_provider' => $user['auth_provider'] ?? 'local',
+                ] : null,
                 'consent_granted' => $granted,
                 'csrf_token' => Security::csrfToken(),
             ]]);
@@ -64,6 +70,11 @@ final class ApiController
             Http::requireJson();
             Security::requireCsrf();
             $auth->login(Http::body());
+        }
+        if ($path === '/api/auth/google' && $method === 'POST') {
+            Http::requireJson();
+            Security::requireCsrf();
+            $auth->google(Http::body());
         }
 
         $userId = Security::requireUser();

@@ -17,7 +17,7 @@ final class MockProviderService
             'account_type' => (string)$sample['account_type'],
             'masked_number' => (string)$sample['masked_number'],
             'balance' => round((float)$sample['balance'], 2),
-            'currency' => (string)($sample['currency'] ?? 'USD'),
+            'currency' => (string)($sample['currency'] ?? 'INR'),
             'is_demo' => true,
         ];
     }

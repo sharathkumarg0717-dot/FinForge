@@ -5,7 +5,7 @@
   const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], transactions: [], investments: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-  const money = (value) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(Number(value) || 0);
+  const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value) || 0);
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const dateLabel = (value) => {
     if (!value) return '—';
@@ -92,6 +92,8 @@
     password.autocomplete = registering ? 'new-password' : 'current-password';
     $('#auth-message').textContent = '';
     $('#auth-form').dataset.mode = mode;
+    const googleBtnText = $('#google-btn-text');
+    if (googleBtnText) googleBtnText.textContent = registering ? 'Sign up with Google' : 'Sign in with Google';
   }
 
   function goTo(screen) {
@@ -162,6 +164,7 @@
       state.consent = Boolean(result.consent_granted);
       if (!result.authenticated || !result.user) {
         showAuth();
+        initGoogleAuth();
         return;
       }
       showApp();
@@ -178,7 +181,12 @@
     const first = (user.name || 'there').trim().split(/\s+/)[0];
     $('#profile-name').textContent = user.name;
     $('#profile-email').textContent = user.email;
-    $('#profile-avatar').textContent = first.charAt(0).toUpperCase();
+    const avatarEl = $('#profile-avatar');
+    if (user.avatar) {
+      avatarEl.innerHTML = `<img src="${esc(user.avatar)}" alt="${esc(user.name)}" class="avatar-img">`;
+    } else {
+      avatarEl.textContent = first.charAt(0).toUpperCase();
+    }
     $('#greeting-name').textContent = first;
     $('#advisor-name').textContent = first;
   }
@@ -386,7 +394,7 @@
     row.innerHTML = `<label>Category name
       <input type="text" name="category" maxlength="40" list="finance-category-options" value="${esc(category)}" placeholder="e.g. Food, Rent, Utilities">
     </label>
-    <label>Amount ($)
+    <label>Amount (₹)
       <input type="number" name="amount" min="0.01" max="9999999999.99" step="0.01" inputmode="decimal" value="${esc(amount)}" placeholder="0.00">
     </label>
     <button class="icon-button" type="button" data-remove-category aria-label="Remove category" title="Remove category"><i class="fa-solid fa-trash"></i></button>`;
@@ -629,6 +637,74 @@
     messages.scrollTop = messages.scrollHeight;
   }
 
+  async function completeAuth(result, toastMessage = 'Welcome back.') {
+    state.user = result.user;
+    state.csrf = result.csrf_token;
+    const consent = await api('/api/consent');
+    state.consent = Boolean(consent.financial_data.granted);
+    clearPersonalFinanceView();
+    showApp();
+    showUser(result.user);
+    updateConsentControls();
+    goTo('personal-finance');
+    toast(toastMessage);
+  }
+
+  async function handleGoogleLogin(payload) {
+    const message = $('#auth-message');
+    const modalError = $('#google-modal-error');
+    if (message) {
+      message.textContent = '';
+      message.classList.remove('error-text');
+    }
+    if (modalError) modalError.textContent = '';
+    const googleBtn = $('#google-signin-custom');
+    if (googleBtn) googleBtn.disabled = true;
+    try {
+      const result = await api('/api/auth/google', { method: 'POST', body: payload });
+      const modal = $('#google-modal');
+      if (modal && typeof modal.close === 'function' && modal.open) {
+        modal.close();
+      }
+      await completeAuth(result, `Signed in with Google as ${result.user.name}.`);
+    } catch (error) {
+      if (modalError && $('#google-modal')?.open) {
+        modalError.textContent = error.message;
+      } else if (message) {
+        message.textContent = error.message;
+        message.classList.add('error-text');
+      }
+      handleError(error);
+    } finally {
+      if (googleBtn) googleBtn.disabled = false;
+    }
+  }
+
+  function initGoogleAuth() {
+    const clientId = window.FINSYNC_GOOGLE_CLIENT_ID;
+    if (clientId && window.google?.accounts?.id) {
+      try {
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => handleGoogleLogin({ credential: response.credential }),
+        });
+        const btnContainer = $('#google-signin-btn');
+        if (btnContainer) {
+          btnContainer.innerHTML = '';
+          google.accounts.id.renderButton(btnContainer, {
+            theme: 'outline',
+            size: 'large',
+            width: 320,
+            text: 'continue_with',
+            shape: 'rectangular',
+          });
+        }
+      } catch (e) {
+        console.warn('Google Identity Services notice:', e);
+      }
+    }
+  }
+
   $('#auth-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -641,16 +717,7 @@
     button.disabled = true;
     try {
       const result = await api(mode === 'register' ? '/api/register' : '/api/login', { method: 'POST', body: data });
-      state.user = result.user;
-      state.csrf = result.csrf_token;
-      const consent = await api('/api/consent');
-      state.consent = Boolean(consent.financial_data.granted);
-      clearPersonalFinanceView();
-      showApp();
-      showUser(result.user);
-      updateConsentControls();
-      goTo('personal-finance');
-      toast(mode === 'register' ? 'Your local demo workspace is ready.' : 'Welcome back.');
+      await completeAuth(result, mode === 'register' ? 'Your local demo workspace is ready.' : 'Welcome back.');
     } catch (error) {
       message.textContent = error.message;
       message.classList.add('error-text');
@@ -738,6 +805,7 @@
       showNotice(error.message || 'Refresh the page before signing in again.', 'error');
     }
     showAuth();
+    initGoogleAuth();
     toast('You have signed out.');
   });
   $('#refresh-button').addEventListener('click', () => loadDashboard().then(() => toast('Overview refreshed.')).catch(handleError));
@@ -886,6 +954,43 @@
   $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('sidebar-open'));
   $('#receipt-close').addEventListener('click', () => $('#receipt-dialog').close());
   $('#receipt-ok').addEventListener('click', () => $('#receipt-dialog').close());
+
+  $('#google-signin-custom')?.addEventListener('click', () => {
+    if (window.FINSYNC_GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
+      try {
+        google.accounts.id.prompt();
+        return;
+      } catch (e) {
+        // Fall back to modal
+      }
+    }
+    const modal = $('#google-modal');
+    if (modal && typeof modal.showModal === 'function') {
+      modal.showModal();
+    }
+  });
+
+  $('#google-modal-close')?.addEventListener('click', () => {
+    const modal = $('#google-modal');
+    if (modal && typeof modal.close === 'function') {
+      modal.close();
+    }
+  });
+
+  $('#google-modal-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submitBtn = $('#google-modal-submit');
+    if (submitBtn) submitBtn.disabled = true;
+    const name = (form.elements.google_name?.value || '').trim();
+    const email = (form.elements.google_email?.value || '').trim();
+    try {
+      await handleGoogleLogin({ name, email });
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') $('#sidebar').classList.remove('sidebar-open');
   });

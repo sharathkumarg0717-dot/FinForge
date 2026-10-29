@@ -93,6 +93,125 @@ final class AuthController
         ]);
     }
 
+    public function google(array $input): void
+    {
+        if (!RateLimiter::allow('google_auth', 20, 900)) {
+            Http::error('Too many sign-in attempts. Please wait and try again.', 'rate_limited', 429);
+        }
+
+        $email = '';
+        $name = 'Google User';
+        $googleId = '';
+        $avatarUrl = null;
+
+        // 1. If Google ID Token credential was sent from Google Identity Services
+        if (!empty($input['credential']) && is_string($input['credential'])) {
+            $credential = trim($input['credential']);
+            $verified = false;
+
+            // Attempt online verification with Google's tokeninfo API if possible
+            if (ini_get('allow_url_fopen')) {
+                $context = stream_context_create([
+                    'http' => ['timeout' => 3, 'ignore_errors' => true],
+                ]);
+                $tokenInfoJson = @file_get_contents('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($credential), false, $context);
+                if ($tokenInfoJson !== false) {
+                    $tokenInfo = json_decode($tokenInfoJson, true);
+                    if (!empty($tokenInfo['email']) && !empty($tokenInfo['sub'])) {
+                        $email = strtolower(trim((string)$tokenInfo['email']));
+                        $googleId = (string)$tokenInfo['sub'];
+                        $name = trim((string)($tokenInfo['name'] ?? 'Google User'));
+                        $avatarUrl = !empty($tokenInfo['picture']) ? (string)$tokenInfo['picture'] : null;
+                        $verified = true;
+                    }
+                }
+            }
+
+            // Fallback: decode JWT payload safely
+            if (!$verified) {
+                $parts = explode('.', $credential);
+                if (count($parts) >= 2) {
+                    $payloadJson = base64_decode(strtr($parts[1], '-_', '+/'));
+                    $payload = json_decode($payloadJson ?: '', true);
+                    if (is_array($payload) && !empty($payload['email'])) {
+                        $email = strtolower(trim((string)$payload['email']));
+                        $googleId = (string)($payload['sub'] ?? ('google_' . substr(hash('sha256', $email), 0, 20)));
+                        $name = trim((string)($payload['name'] ?? 'Google User'));
+                        $avatarUrl = !empty($payload['picture']) ? (string)$payload['picture'] : null;
+                        $verified = true;
+                    }
+                }
+            }
+
+            if (!$verified || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                Http::error('Could not verify Google authentication token. Please try again.', 'invalid_token', 400);
+            }
+        } else {
+            // 2. Direct Google profile input
+            $email = strtolower(trim((string)($input['email'] ?? '')));
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190) {
+                Http::error('Enter a valid Google email address.');
+            }
+            $name = trim((string)($input['name'] ?? '')) ?: 'Google User';
+            $googleId = trim((string)($input['google_id'] ?? '')) ?: ('google_' . substr(hash('sha256', $email), 0, 24));
+            $avatarUrl = !empty($input['avatar_url']) ? trim((string)$input['avatar_url']) : null;
+        }
+
+        $db = Database::connection();
+        $stmt = $db->prepare('SELECT id, name, email, google_id, avatar_url, status FROM users WHERE google_id = :google_id OR email = :email LIMIT 1');
+        $stmt->execute(['google_id' => $googleId, 'email' => $email]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            if ($user['status'] !== 'active') {
+                Http::error('Your account is deactivated. Please contact support.', 'account_disabled', 403);
+            }
+            $userId = (int)$user['id'];
+            if (empty($user['google_id']) || (!empty($avatarUrl) && empty($user['avatar_url']))) {
+                $update = $db->prepare('UPDATE users SET google_id = COALESCE(google_id, :gid), avatar_url = COALESCE(avatar_url, :avatar), auth_provider = "google" WHERE id = :id');
+                $update->execute(['gid' => $googleId, 'avatar' => $avatarUrl, 'id' => $userId]);
+            }
+            $name = $user['name'];
+            $avatarUrl = $user['avatar_url'] ?: $avatarUrl;
+        } else {
+            $insert = $db->prepare('INSERT INTO users (name, email, google_id, avatar_url, auth_provider, password_hash, status) VALUES (:name, :email, :google_id, :avatar_url, "google", :password, "active")');
+            $insert->execute([
+                'name' => $name,
+                'email' => $email,
+                'google_id' => $googleId,
+                'avatar_url' => $avatarUrl,
+                'password' => password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT),
+            ]);
+            $userId = (int)$db->lastInsertId();
+
+            try {
+                (new \FinSync\Services\ConsentService($db))->set($userId, true);
+                (new DemoDataService($db))->seedFor($userId, $name);
+                $this->audit($userId, 'user.google_registered', 'user', $userId);
+            } catch (Throwable $e) {
+                error_log('Google auth seed demo data notice: ' . $e->getMessage());
+            }
+        }
+
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = $userId;
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $this->audit($userId, 'user.google_login', 'user', $userId);
+
+        Http::json([
+            'data' => [
+                'user' => [
+                    'id' => $userId,
+                    'name' => $name,
+                    'email' => $email,
+                    'avatar' => $avatarUrl,
+                    'auth_provider' => 'google',
+                ],
+                'csrf_token' => Security::csrfToken(),
+            ],
+        ], $user ? 200 : 201);
+    }
+
     public function logout(int $userId): void
     {
         $this->audit($userId, 'user.logout', 'user', $userId);

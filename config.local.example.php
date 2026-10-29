@@ -16,4 +16,7 @@ return [
         'base_path' => '', // Example: '/finsync/public' when hosted below htdocs.
         'environment' => 'local',
     ],
+    'google' => [
+        'client_id' => '', // Optional: Google OAuth 2.0 Web Client ID from Google Cloud Console
+    ],
 ];

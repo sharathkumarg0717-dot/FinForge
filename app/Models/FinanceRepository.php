@@ -210,7 +210,7 @@ final class FinanceRepository
             } else {
                 $analysis['indicators'][] = [
                     'status' => 'positive',
-                    'label' => 'Positive cash flow (+$' . number_format($analysis['cash_flow'], 2) . ')',
+                    'label' => 'Positive cash flow (+₹' . number_format($analysis['cash_flow'], 2) . ')',
                     'icon' => 'fa-circle-check',
                 ];
             }
@@ -240,19 +240,19 @@ final class FinanceRepository
             if ($analysis['total_debt'] === 0.0) {
                 $analysis['indicators'][] = [
                     'status' => 'positive',
-                    'label' => 'Debt-free: $0.00 total debt',
+                    'label' => 'Debt-free: ₹0.00 total debt',
                     'icon' => 'fa-shield-halved',
                 ];
             } elseif ($analysis['total_income'] > 0 && $analysis['total_debt'] >= $analysis['total_income']) {
                 $analysis['indicators'][] = [
                     'status' => 'warning',
-                    'label' => 'High debt level ($' . number_format($analysis['total_debt'], 2) . ')',
+                    'label' => 'High debt level (₹' . number_format($analysis['total_debt'], 2) . ')',
                     'icon' => 'fa-triangle-exclamation',
                 ];
             } else {
                 $analysis['indicators'][] = [
                     'status' => 'info',
-                    'label' => 'Debt recorded ($' . number_format($analysis['total_debt'], 2) . ')',
+                    'label' => 'Debt recorded (₹' . number_format($analysis['total_debt'], 2) . ')',
                     'icon' => 'fa-landmark',
                 ];
             }
@@ -283,7 +283,7 @@ final class FinanceRepository
             if ($analysis['investments'] > 0) {
                 $analysis['indicators'][] = [
                     'status' => 'positive',
-                    'label' => 'Investments: $' . number_format($analysis['investments'], 2),
+                    'label' => 'Investments: ₹' . number_format($analysis['investments'], 2),
                     'icon' => 'fa-chart-line',
                 ];
             }
@@ -292,19 +292,19 @@ final class FinanceRepository
             if ($analysis['cash_flow'] < 0) {
                 $topCat = $analysis['highest_spending_category'];
                 $analysis['suggestions'][] = sprintf(
-                    'Warning: Your expenses are higher than your income (negative cash flow of -$%s). Review your largest spending categories%s to bring your budget back into positive cash flow.',
+                    'Warning: Your expenses are higher than your income (negative cash flow of -₹%s). Review your largest spending categories%s to bring your budget back into positive cash flow.',
                     number_format(abs($analysis['cash_flow']), 2),
-                    $topCat ? ' (such as ' . $topCat['category'] . ' at $' . number_format($topCat['amount'], 2) . ')' : ''
+                    $topCat ? ' (such as ' . $topCat['category'] . ' at ₹' . number_format($topCat['amount'], 2) . ')' : ''
                 );
             } elseif ($analysis['savings_rate'] !== null && $analysis['savings_rate'] >= 20) {
                 $analysis['suggestions'][] = sprintf(
-                    'Your savings rate is at least 20%% (currently %.1f%% with net +$%s saved). Keep directing savings toward the goals you recorded.',
+                    'Your savings rate is at least 20%% (currently %.1f%% with net +₹%s saved). Keep directing savings toward the goals you recorded.',
                     $analysis['savings_rate'],
                     number_format($analysis['net_savings'], 2)
                 );
             } elseif ($analysis['savings_rate'] !== null) {
                 $analysis['suggestions'][] = sprintf(
-                    'Consider whether you can increase the amount set aside for savings based on your current cash flow (currently %.1f%%). Targeting 20%% would save approximately $%s monthly.',
+                    'Consider whether you can increase the amount set aside for savings based on your current cash flow (currently %.1f%%). Targeting 20%% would save approximately ₹%s monthly.',
                     $analysis['savings_rate'],
                     number_format(max(0, ($analysis['total_income'] * 0.20) - $analysis['net_savings']), 2)
                 );
@@ -312,20 +312,20 @@ final class FinanceRepository
 
             if ($analysis['credit_card_balance'] > 0) {
                 $analysis['suggestions'][] = sprintf(
-                    'You have a credit card balance of $%s. Prioritize paying this off to avoid high interest charges.',
+                    'You have a credit card balance of ₹%s. Prioritize paying this off to avoid high interest charges.',
                     number_format($analysis['credit_card_balance'], 2)
                 );
             }
 
             if ($analysis['total_debt'] > 0 && $analysis['total_income'] > 0 && $analysis['total_debt'] >= $analysis['total_income']) {
                 $analysis['suggestions'][] = sprintf(
-                    'Your recorded debt is at least one month of income ($%s debt vs $%s income). Review repayment priorities and your credit-card balance.',
+                    'Your recorded debt is at least one month of income (₹%s debt vs ₹%s income). Review repayment priorities and your credit-card balance.',
                     number_format($analysis['total_debt'], 2),
                     number_format($analysis['total_income'], 2)
                 );
             } elseif ($analysis['loans_debt'] > 0) {
                 $analysis['suggestions'][] = sprintf(
-                    'Your loan debt is $%s. Keep loan minimums accounted for in your monthly plan.',
+                    'Your loan debt is ₹%s. Keep loan minimums accounted for in your monthly plan.',
                     number_format($analysis['loans_debt'], 2)
                 );
             }
@@ -333,7 +333,7 @@ final class FinanceRepository
             if ($analysis['highest_spending_category'] !== null && $totalCategorySum > 0) {
                 $topCat = $analysis['highest_spending_category'];
                 $analysis['suggestions'][] = sprintf(
-                    '%s is your highest listed spending category at $%s (%.1f%% of your expense-category total).',
+                    '%s is your highest listed spending category at ₹%s (%.1f%% of your expense-category total).',
                     $topCat['category'],
                     number_format($topCat['amount'], 2),
                     ($topCat['amount'] / $totalCategorySum) * 100
@@ -450,7 +450,7 @@ final class FinanceRepository
                 'upcoming' => array_slice($recurring, 0, 4),
                 'health_score' => $healthScore,
                 'health_explanation' => sprintf(
-                    'Real financial health score based on your saved financial records (Income: $%s, Expenses: $%s, Net: $%s).',
+                    'Real financial health score based on your saved financial records (Income: ₹%s, Expenses: ₹%s, Net: ₹%s).',
                     number_format($income, 2),
                     number_format($expenses, 2),
                     number_format($net, 2)

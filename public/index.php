@@ -29,6 +29,7 @@ use FinSync\Controllers\ApiController;
 Security::startSession();
 $configuration = Database::config();
 $basePath = rtrim((string)($configuration['app']['base_path'] ?? ''), '/');
+$googleClientId = (string)($configuration['google']['client_id'] ?? '');
 $nonce = base64_encode(random_bytes(18));
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
@@ -48,6 +49,12 @@ if ($requestPath === '//') {
     $requestPath = '/';
 }
 
+if ($requestPath === '/api/config/auth' && Http::method() === 'GET') {
+    Http::json(['data' => [
+        'google_client_id' => $googleClientId,
+    ]]);
+}
+
 if (str_starts_with($requestPath, '/api/')) {
     try {
         (new ApiController())->dispatch($requestPath, Http::method());
@@ -61,7 +68,7 @@ header('Content-Type: text/html; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://accounts.google.com/gsi/style; font-src 'self' https://cdnjs.cloudflare.com data:; img-src 'self' data: https://*.googleusercontent.com https://accounts.google.com; frame-src 'self' https://accounts.google.com/; connect-src 'self' https://accounts.google.com/ https://oauth2.googleapis.com/; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
 ?>
 <!doctype html>
 <html lang="en" data-theme="light">
@@ -72,10 +79,15 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <title>FinSync — Family finances, in focus</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link rel="preconnect" href="https://accounts.google.com">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <link rel="stylesheet" href="<?= Security::escape($basePath) ?>/assets/app.css">
-  <script nonce="<?= Security::escape($nonce) ?>">window.FINSYNC_BASE = <?= json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+  <script nonce="<?= Security::escape($nonce) ?>">
+    window.FINSYNC_BASE = <?= json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    window.FINSYNC_GOOGLE_CLIENT_ID = <?= json_encode($googleClientId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <div id="auth-view" class="auth-shell" hidden>
@@ -105,6 +117,19 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <button id="auth-submit" class="primary-button full-button" type="submit"><span>Sign in</span><i class="fa-solid fa-arrow-right"></i></button>
           <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
         </form>
+        <div class="auth-divider"><span>or continue with</span></div>
+        <div id="google-auth-container" class="google-auth-box">
+          <div id="google-signin-btn"></div>
+          <button type="button" id="google-signin-custom" class="google-button" aria-label="Sign in with Google">
+            <svg class="google-icon" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span id="google-btn-text">Sign in with Google</span>
+          </button>
+        </div>
         <div class="auth-safety"><i class="fa-solid fa-lock" aria-hidden="true"></i><span>Your password is hashed. Never enter real bank credentials here.</span></div>
       </div>
     </section>
@@ -212,13 +237,13 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
               <label>Record month <span class="required-star">*</span>
                 <input name="month" type="month" required>
               </label>
-              <label>Monthly income ($) <span class="required-star">*</span>
+              <label>Monthly income (₹) <span class="required-star">*</span>
                 <input name="monthly_income" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" required placeholder="0.00">
               </label>
-              <label>Other income ($)
+              <label>Other income (₹)
                 <input name="other_income" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" value="0.00" placeholder="0.00">
               </label>
-              <label>Monthly expenses ($) <span class="required-star">*</span>
+              <label>Monthly expenses (₹) <span class="required-star">*</span>
                 <input name="monthly_expenses" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" required placeholder="0.00">
               </label>
               
@@ -254,26 +279,26 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
                 <div class="category-actions-bar">
                   <button class="outline-button small-button" id="add-finance-category" type="button"><i class="fa-solid fa-plus"></i> Add category row</button>
                   <div class="category-calc-row">
-                    <span>Category total: <strong id="category-sum-display">$0.00</strong></span>
+                    <span>Category total: <strong id="category-sum-display">₹0.00</strong></span>
                     <button type="button" id="sync-category-expense" class="text-button"><i class="fa-solid fa-copy"></i> Set as Monthly expenses</button>
                   </div>
                 </div>
               </fieldset>
 
-              <label>Savings balance ($)
+              <label>Savings balance (₹)
                 <input name="savings" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" value="0.00" placeholder="0.00">
               </label>
-              <label>Investments balance ($)
+              <label>Investments balance (₹)
                 <input name="investments" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" value="0.00" placeholder="0.00">
               </label>
-              <label>Loans / debt ($)
+              <label>Loans / debt (₹)
                 <input name="loans_debt" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" value="0.00" placeholder="0.00">
               </label>
-              <label>Credit card balance ($)
+              <label>Credit card balance (₹)
                 <input name="credit_card_balance" type="number" min="0" max="9999999999.99" step="0.01" inputmode="decimal" value="0.00" placeholder="0.00">
               </label>
               <label class="finance-wide">Financial goals
-                <textarea name="financial_goals" rows="2" maxlength="2000" placeholder="e.g. Save $10,000 for emergency fund, pay off credit card debt"></textarea>
+                <textarea name="financial_goals" rows="2" maxlength="2000" placeholder="e.g. Save ₹1,00,000 for emergency fund, pay off credit card debt"></textarea>
               </label>
               <label class="finance-wide">Optional notes
                 <textarea name="notes" rows="2" maxlength="2000" placeholder="Add any details, breakdown notes, or reminders for this month"></textarea>
@@ -401,13 +426,13 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <section class="screen" id="screen-overview">
           <div class="page-heading"><div><p class="eyebrow">HOUSEHOLD SNAPSHOT <span class="live-dot"></span> DEMO</p><h1>Good to see you, <span id="greeting-name">there</span></h1><p class="subtitle">Here’s a thoughtful snapshot of your household finances.</p></div><button class="outline-button" id="refresh-button"><i class="fa-solid fa-arrows-rotate"></i> Refresh view</button></div>
           <div class="stat-grid">
-            <article class="stat-card feature-stat"><div class="stat-top"><span class="stat-label">Total net worth <i class="fa-regular fa-circle-question" title="Synthetic assets less demo liabilities"></i></span><span class="stat-icon blue-icon"><i class="fa-solid fa-scale-balanced"></i></span></div><div class="stat-value" id="net-worth">$—</div><div class="stat-foot"><span class="status-chip neutral-chip"><i class="fa-solid fa-flask"></i> Demo snapshot</span><span class="muted">Across your household</span></div><div class="stat-glow"></div></article>
-            <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly income</span><span class="stat-icon green-icon"><i class="fa-solid fa-arrow-down-long"></i></span></div><div class="stat-value" id="monthly-income">$—</div><div class="stat-foot"><span class="tiny-note">Synthetic entries this month</span></div></article>
-            <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly expenses</span><span class="stat-icon amber-icon"><i class="fa-solid fa-arrow-up-long"></i></span></div><div class="stat-value" id="monthly-expenses">$—</div><div class="stat-foot"><span class="tiny-note">Synthetic entries this month</span></div></article>
-            <article class="stat-card"><div class="stat-top"><span class="stat-label">Investment value</span><span class="stat-icon violet-icon"><i class="fa-solid fa-chart-pie"></i></span></div><div class="stat-value" id="investment-value">$—</div><div class="stat-foot"><span class="tiny-note"><span id="account-count">0</span> connected demo accounts</span></div></article>
+            <article class="stat-card feature-stat"><div class="stat-top"><span class="stat-label">Total net worth <i class="fa-regular fa-circle-question" title="Synthetic assets less demo liabilities"></i></span><span class="stat-icon blue-icon"><i class="fa-solid fa-scale-balanced"></i></span></div><div class="stat-value" id="net-worth">₹—</div><div class="stat-foot"><span class="status-chip neutral-chip"><i class="fa-solid fa-flask"></i> Demo snapshot</span><span class="muted">Across your household</span></div><div class="stat-glow"></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly income</span><span class="stat-icon green-icon"><i class="fa-solid fa-arrow-down-long"></i></span></div><div class="stat-value" id="monthly-income">₹—</div><div class="stat-foot"><span class="tiny-note">Synthetic entries this month</span></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-label">Monthly expenses</span><span class="stat-icon amber-icon"><i class="fa-solid fa-arrow-up-long"></i></span></div><div class="stat-value" id="monthly-expenses">₹—</div><div class="stat-foot"><span class="tiny-note">Synthetic entries this month</span></div></article>
+            <article class="stat-card"><div class="stat-top"><span class="stat-label">Investment value</span><span class="stat-icon violet-icon"><i class="fa-solid fa-chart-pie"></i></span></div><div class="stat-value" id="investment-value">₹—</div><div class="stat-foot"><span class="tiny-note"><span id="account-count">0</span> connected demo accounts</span></div></article>
           </div>
           <div class="overview-grid">
-            <article class="panel cashflow-panel"><div class="panel-heading"><div><h2>Monthly cash flow</h2><p>Demo income compared with expenses</p></div><span class="period-tag">THIS MONTH</span></div><div class="chart-frame"><canvas id="cashflow-chart" role="img" aria-label="Bar chart comparing synthetic income and expenses this month"></canvas><div class="chart-fallback" id="cashflow-fallback"></div></div><div class="chart-legend"><span><i class="legend-dot income-dot"></i>Income</span><span><i class="legend-dot expense-dot"></i>Expenses</span><b id="monthly-net">Net $—</b></div></article>
+            <article class="panel cashflow-panel"><div class="panel-heading"><div><h2>Monthly cash flow</h2><p>Demo income compared with expenses</p></div><span class="period-tag">THIS MONTH</span></div><div class="chart-frame"><canvas id="cashflow-chart" role="img" aria-label="Bar chart comparing synthetic income and expenses this month"></canvas><div class="chart-fallback" id="cashflow-fallback"></div></div><div class="chart-legend"><span><i class="legend-dot income-dot"></i>Income</span><span><i class="legend-dot expense-dot"></i>Expenses</span><b id="monthly-net">Net ₹—</b></div></article>
             <article class="panel health-panel"><div class="panel-heading"><div><h2>Financial wellness</h2><p>Simple demo indicator</p></div><span class="stat-icon blue-icon"><i class="fa-solid fa-heart-pulse"></i></span></div><div class="health-score"><div class="score-ring"><strong id="health-score">—</strong><small>of 100</small></div><div class="score-copy"><b id="health-label">Demo snapshot</b><p id="health-explanation">An educational summary based on synthetic records.</p></div></div><div class="health-note"><i class="fa-solid fa-circle-info"></i> Not a credit score or professional advice.</div></article>
           </div>
           <div class="overview-grid lower-grid">
@@ -436,7 +461,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
         <section class="screen" id="screen-investments" hidden>
           <div class="page-heading"><div><p class="eyebrow">LONG-TERM VIEW</p><h1>Investments</h1><p class="subtitle">A synthetic holdings snapshot from your mock broker adapter.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-flask"></i> Demo portfolio</span></div>
-          <div class="investment-highlight"><div><span class="stat-label">Total demo holdings value</span><strong id="holdings-total">$—</strong><small>Values are illustrative and can change in a real market.</small></div><div class="investment-icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
+          <div class="investment-highlight"><div><span class="stat-label">Total demo holdings value</span><strong id="holdings-total">₹—</strong><small>Values are illustrative and can change in a real market.</small></div><div class="investment-icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div>
           <article class="panel"><div class="panel-heading"><div><h2>Portfolio holdings</h2><p>Instrument names and values are entirely synthetic.</p></div><span class="period-tag">SYNTHETIC</span></div><div class="table-wrap"><table><thead><tr><th>INSTRUMENT</th><th>SYMBOL</th><th>UNITS</th><th>PRICE</th><th class="align-right">MARKET VALUE</th></tr></thead><tbody id="investments-table"></tbody></table></div></article>
         </section>
 
@@ -468,6 +493,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="receipt-dialog"><article><header><button aria-label="Close" rel="prev" id="receipt-close"></button><h2>Demo receipt created</h2></header><div id="receipt-content"></div><footer><button class="primary-button" id="receipt-ok">Done</button></footer></article></dialog>
+  <dialog id="google-modal" class="google-modal"><article><header><button aria-label="Close" rel="prev" id="google-modal-close"></button><h2><i class="fa-brands fa-google"></i> Sign in with Google</h2></header><form id="google-modal-form"><p class="modal-sub">Confirm your Google profile details to sign in or connect your account.</p><label>Name<input type="text" name="google_name" value="Sharath Kumar" required></label><label>Email address<input type="email" name="google_email" value="sharathkumarg0717@gmail.com" required></label><p id="google-modal-error" class="form-message error-text" role="status" aria-live="polite"></p><footer><button type="submit" id="google-modal-submit" class="primary-button full-button"><i class="fa-brands fa-google"></i> Continue with Google</button></footer></form></article></dialog>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="<?= Security::escape($basePath) ?>/assets/app.js" defer></script>
 </body>
