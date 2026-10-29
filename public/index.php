@@ -444,9 +444,248 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-family" hidden>
-          <div class="page-heading"><div><p class="eyebrow">YOUR HOUSEHOLD</p><h1>Family members</h1><p class="subtitle">Manage the demo profiles included in your household view.</p></div><button class="primary-button" id="add-family-button"><i class="fa-solid fa-plus"></i> Add member</button></div>
-          <article class="panel"><div class="panel-heading"><div><h2>Household profiles</h2><p>All financial fixtures are synthetic demo records.</p></div><span id="family-total" class="period-tag"></span></div><div class="table-wrap"><table><thead><tr><th>MEMBER</th><th>RELATIONSHIP</th><th>DEMO ACCOUNTS</th><th>STATUS</th><th></th></tr></thead><tbody id="family-table"></tbody></table></div><div id="family-empty" class="empty-state" hidden><i class="fa-solid fa-people-roof"></i><p>No active household profiles yet.</p></div></article>
-          <article id="family-form-panel" class="panel form-panel" hidden><div class="panel-heading"><div><h2>Add a family profile</h2><p>This creates a profile only; it does not connect an account.</p></div><button class="icon-button" id="family-form-close" aria-label="Close form"><i class="fa-solid fa-xmark"></i></button></div><form id="family-form" class="inline-form"><label>Member name<input name="name" maxlength="120" required></label><label>Relationship<select name="relationship" required><option value="">Choose one</option><option>Partner</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Other</option></select></label><button class="primary-button" type="submit">Add profile</button></form></article>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">YOUR HOUSEHOLD FINANCIALS <span class="live-dot"></span> LIVE CALCULATIONS</p>
+              <h1>Family finance &amp; members</h1>
+              <p class="subtitle">View total household savings, spend, debt, credit, and click any family member to open their individual dashboard.</p>
+            </div>
+            <div class="page-heading-actions">
+              <button class="primary-button" id="add-family-button"><i class="fa-solid fa-user-plus"></i> Add member</button>
+            </div>
+          </div>
+
+          <!-- ENTIRE FAMILY CALCULATIONS (HOUSEHOLD TOTALS) -->
+          <div class="family-calculations-section">
+            <div class="stat-grid family-stat-grid">
+              <article class="stat-card">
+                <div class="stat-top">
+                  <span class="stat-label">Family Total Savings</span>
+                  <span class="stat-icon green-icon"><i class="fa-solid fa-piggy-bank"></i></span>
+                </div>
+                <div class="stat-value" id="family-calc-savings">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Combined bank &amp; liquid savings</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top">
+                  <span class="stat-label">Family Total Spend</span>
+                  <span class="stat-icon orange-icon"><i class="fa-solid fa-arrow-trend-down"></i></span>
+                </div>
+                <div class="stat-value" id="family-calc-spend">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Combined household expenses</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top">
+                  <span class="stat-label">Family Total Debt</span>
+                  <span class="stat-icon red-icon"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+                </div>
+                <div class="stat-value" id="family-calc-debt">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Loans &amp; outstanding balances</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top">
+                  <span class="stat-label">Family Total Credit</span>
+                  <span class="stat-icon purple-icon"><i class="fa-solid fa-credit-card"></i></span>
+                </div>
+                <div class="stat-value" id="family-calc-credit">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Credit card balances / usage</span></div>
+              </article>
+              <article class="stat-card feature-stat">
+                <div class="stat-top">
+                  <span class="stat-label">Family Net Worth</span>
+                  <span class="stat-icon blue-icon"><i class="fa-solid fa-scale-balanced"></i></span>
+                </div>
+                <div class="stat-value" id="family-calc-networth">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Assets (Savings + Invest) − Debt</span></div>
+              </article>
+            </div>
+          </div>
+
+          <!-- ADD FAMILY MEMBER FORM PANEL -->
+          <article id="family-form-panel" class="panel form-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <h2>Add a family profile</h2>
+                <p>Create a household member profile. You can link demo accounts to them anytime.</p>
+              </div>
+              <button class="icon-button" id="family-form-close" aria-label="Close form"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="family-form" class="inline-form">
+              <label>Member name<input name="name" maxlength="120" placeholder="e.g. Priya Kumar" required></label>
+              <label>Relationship
+                <select name="relationship" required>
+                  <option value="">Choose one</option>
+                  <option>Partner</option>
+                  <option>Child</option>
+                  <option>Parent</option>
+                  <option>Sibling</option>
+                  <option>Other</option>
+                </select>
+              </label>
+              <button class="primary-button" type="submit"><i class="fa-solid fa-check"></i> Add profile</button>
+            </form>
+          </article>
+
+          <!-- HOUSEHOLD PROFILES / MEMBERS LIST PANEL -->
+          <div id="family-main-view">
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Household members &amp; dashboards</h2>
+                  <p>Click on any family member avatar or card to open their dedicated personal dashboard.</p>
+                </div>
+                <span id="family-total" class="period-tag"></span>
+              </div>
+              
+              <!-- Family Member Cards Grid -->
+              <div id="family-cards-grid" class="family-members-grid"></div>
+
+              <!-- Family Members Table View -->
+              <div class="table-wrap" style="margin-top: 18px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>MEMBER</th>
+                      <th>RELATIONSHIP</th>
+                      <th>SAVINGS</th>
+                      <th>SPEND</th>
+                      <th>DEBT / CREDIT</th>
+                      <th>ACCOUNTS</th>
+                      <th>STATUS</th>
+                      <th class="align-right">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="family-table"></tbody>
+                </table>
+              </div>
+              <div id="family-empty" class="empty-state" hidden>
+                <i class="fa-solid fa-people-roof"></i>
+                <p>No active household profiles yet. Click "Add member" to get started.</p>
+              </div>
+            </article>
+          </div>
+
+          <!-- INDIVIDUAL MEMBER DASHBOARD VIEW (Shown when a member is clicked) -->
+          <div id="family-member-view" hidden>
+            <div class="member-dashboard-topbar">
+              <button class="outline-button" id="member-back-button" type="button"><i class="fa-solid fa-arrow-left"></i> Back to family overview</button>
+              <div class="member-quick-switcher">
+                <span>Switch member:</span>
+                <select id="member-select-switcher" aria-label="Switch family member"></select>
+              </div>
+            </div>
+
+            <!-- Member Header Card -->
+            <article class="panel member-header-panel">
+              <div class="member-header-wrap">
+                <div class="member-large-avatar" id="member-dash-avatar">M</div>
+                <div class="member-header-info">
+                  <div class="member-title-row">
+                    <h2 id="member-dash-name">Member Name</h2>
+                    <span class="status-chip success-chip" id="member-dash-status">Active</span>
+                  </div>
+                  <p class="member-sub-info">
+                    <span class="type-chip" id="member-dash-relation">Relationship</span>
+                    <span id="member-dash-accounts-count">0 accounts linked</span>
+                  </p>
+                </div>
+                <div class="member-header-actions">
+                  <button class="primary-button" id="member-link-account-btn" type="button"><i class="fa-solid fa-plus"></i> Link demo account</button>
+                </div>
+              </div>
+            </article>
+
+            <!-- Member Specific Financial Calculations -->
+            <div class="stat-grid compact-stats" style="margin-bottom: 18px;">
+              <article class="stat-card">
+                <div class="stat-top"><span class="stat-label">Member Savings</span><span class="stat-icon green-icon"><i class="fa-solid fa-piggy-bank"></i></span></div>
+                <div class="stat-value" id="member-dash-savings">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Checking &amp; savings</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top"><span class="stat-label">Member Spending</span><span class="stat-icon orange-icon"><i class="fa-solid fa-arrow-trend-down"></i></span></div>
+                <div class="stat-value" id="member-dash-spend">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Expenses &amp; purchases</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top"><span class="stat-label">Member Debt</span><span class="stat-icon red-icon"><i class="fa-solid fa-hand-holding-dollar"></i></span></div>
+                <div class="stat-value" id="member-dash-debt">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Loans &amp; borrowings</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top"><span class="stat-label">Member Credit</span><span class="stat-icon purple-icon"><i class="fa-solid fa-credit-card"></i></span></div>
+                <div class="stat-value" id="member-dash-credit">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Credit card usage</span></div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-top"><span class="stat-label">Member Investments</span><span class="stat-icon blue-icon"><i class="fa-solid fa-chart-line"></i></span></div>
+                <div class="stat-value" id="member-dash-investments">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Holdings &amp; assets</span></div>
+              </article>
+              <article class="stat-card feature-stat">
+                <div class="stat-top"><span class="stat-label">Net Contribution</span><span class="stat-icon blue-icon"><i class="fa-solid fa-wallet"></i></span></div>
+                <div class="stat-value" id="member-dash-net">₹0.00</div>
+                <div class="stat-foot"><span class="tiny-note">Assets − Liabilities</span></div>
+              </article>
+            </div>
+
+            <!-- Member Accounts Panel -->
+            <article class="panel" style="margin-bottom: 18px;">
+              <div class="panel-heading">
+                <div>
+                  <h2>Connected accounts</h2>
+                  <p>Bank, savings, credit, loan, and wallet accounts for this member.</p>
+                </div>
+                <button class="outline-button small-button" id="member-add-account-sub-btn" type="button"><i class="fa-solid fa-plus"></i> Add account</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>INSTITUTION</th>
+                      <th>TYPE</th>
+                      <th>ACCOUNT NUMBER</th>
+                      <th class="align-right">BALANCE</th>
+                    </tr>
+                  </thead>
+                  <tbody id="member-accounts-table"></tbody>
+                </table>
+              </div>
+              <div id="member-accounts-empty" class="empty-state" hidden>
+                <i class="fa-solid fa-wallet"></i>
+                <p>No accounts connected for this member yet. Click "Link demo account" above to add one.</p>
+              </div>
+            </article>
+
+            <!-- Member Transactions Panel -->
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Recent activity</h2>
+                  <p>Transactions associated with this member's accounts.</p>
+                </div>
+                <span id="member-tx-count" class="period-tag">0 entries</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>DESCRIPTION</th>
+                      <th>CATEGORY</th>
+                      <th>ACCOUNT</th>
+                      <th>DATE</th>
+                      <th class="align-right">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody id="member-tx-table"></tbody>
+                </table>
+              </div>
+              <div id="member-tx-empty" class="empty-state" hidden>
+                <i class="fa-solid fa-receipt"></i>
+                <p>No transactions recorded for this member's accounts yet.</p>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="screen" id="screen-accounts" hidden>
@@ -494,6 +733,41 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="receipt-dialog"><article><header><button aria-label="Close" rel="prev" id="receipt-close"></button><h2>Demo receipt created</h2></header><div id="receipt-content"></div><footer><button class="primary-button" id="receipt-ok">Done</button></footer></article></dialog>
   <dialog id="google-modal" class="google-modal"><article><header><button aria-label="Close" rel="prev" id="google-modal-close"></button><h2><i class="fa-brands fa-google"></i> Sign in with Google</h2></header><form id="google-modal-form"><p class="modal-sub">Confirm your Google profile details to sign in or connect your account.</p><label>Name<input type="text" name="google_name" value="Sharath Kumar" required></label><label>Email address<input type="email" name="google_email" value="sharathkumarg0717@gmail.com" required></label><p id="google-modal-error" class="form-message error-text" role="status" aria-live="polite"></p><footer><button type="submit" id="google-modal-submit" class="primary-button full-button"><i class="fa-brands fa-google"></i> Continue with Google</button></footer></form></article></dialog>
+  <dialog id="family-account-dialog" class="family-account-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" id="family-account-dialog-close"></button>
+        <h2><i class="fa-solid fa-wallet"></i> Link Demo Account</h2>
+      </header>
+      <form id="family-account-form">
+        <p class="modal-sub">Add a synthetic bank, credit, loan, or investment account for <b id="family-account-member-name">Member</b>.</p>
+        <input type="hidden" name="family_member_id" id="family-account-member-id" required>
+        <label>Financial Institution
+          <input type="text" name="institution" placeholder="e.g. State Bank of India, HDFC Bank, ICICI Bank" required>
+        </label>
+        <label>Account Type
+          <select name="account_type" required>
+            <option value="savings" selected>Savings Account</option>
+            <option value="checking">Checking / Salary Account</option>
+            <option value="credit">Credit Card</option>
+            <option value="loan">Personal / Home Loan</option>
+            <option value="investment">Investment Portfolio</option>
+            <option value="wallet">Digital Wallet</option>
+          </select>
+        </label>
+        <label>Account / Card Number
+          <input type="text" name="masked_number" placeholder="•••• 5521" maxlength="24">
+        </label>
+        <label>Current Balance (₹)
+          <input type="number" step="0.01" name="balance" placeholder="25000" required>
+        </label>
+        <p id="family-account-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="family-account-submit" class="primary-button full-button"><i class="fa-solid fa-check"></i> Save &amp; Connect Account</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="<?= Security::escape($basePath) ?>/assets/app.js" defer></script>
 </body>

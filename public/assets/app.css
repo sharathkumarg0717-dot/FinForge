@@ -1079,3 +1079,274 @@ dialog footer { justify-content: flex-end; }
   border-radius: 50%;
   object-fit: cover;
 }
+
+/* ==========================================================================
+   Family Section & Household Member Dashboards
+   ========================================================================== */
+
+.family-calculations-section {
+  margin-bottom: 24px;
+}
+
+.family-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1200px) {
+  .family-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .family-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .family-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.family-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.family-member-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.family-member-card:hover {
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+}
+
+.member-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-avatar-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: transform .15s ease;
+}
+
+.member-avatar-btn:hover {
+  transform: scale(1.08);
+}
+
+.member-avatar-btn:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.member-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.25);
+}
+
+.member-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-card-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-card-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 14px 0 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #edf2f7;
+}
+
+.member-kpi-item small {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+}
+
+.member-kpi-item b {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.member-acc-count {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.member-link-text {
+  color: #1d4ed8;
+  font-size: 13.5px;
+  font-weight: 650;
+  transition: color .15s ease;
+}
+
+.member-cell:hover .member-link-text {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Member Individual Dashboard */
+.member-dashboard-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.member-quick-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #334155;
+}
+
+.member-quick-switcher select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.member-header-panel {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+  color: #ffffff !important;
+  padding: 24px 28px !important;
+  border-radius: 16px !important;
+  border: 1px solid #334155 !important;
+  margin-bottom: 20px !important;
+}
+
+.member-header-wrap {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.member-large-avatar {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
+  flex-shrink: 0;
+}
+
+.member-header-info {
+  flex: 1;
+  min-width: 220px;
+}
+
+.member-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.member-title-row h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 750;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+.member-sub-info {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.member-header-actions {
+  margin-left: auto;
+}
+
+.family-account-modal article {
+  max-width: 480px;
+  width: 100%;
+}

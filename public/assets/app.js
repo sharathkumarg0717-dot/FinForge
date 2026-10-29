@@ -2,7 +2,7 @@
   'use strict';
 
   const base = window.FINSYNC_BASE || '';
-  const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], transactions: [], investments: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
+  const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], familyOverview: null, selectedFamilyMemberId: null, transactions: [], investments: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value) || 0);
@@ -538,13 +538,225 @@
     }).join('') : '<div class="empty-state"><p>No upcoming demo items.</p></div>';
   }
 
-  async function loadFamily() {
-    state.family = await api('/api/family');
-    $('#family-count').textContent = state.family.filter((member) => member.status === 'active').length || '';
-    $('#family-total').textContent = `${state.family.length} PROFILES`;
+  async function loadFamily(keepMemberOpen = false) {
+    const data = await api('/api/family-overview');
+    state.familyOverview = data;
+    state.family = data.members || [];
+
+    const summary = data.summary || {
+      family_savings: 0,
+      family_spend: 0,
+      family_debt: 0,
+      family_credit: 0,
+      family_net_worth: 0,
+      active_member_count: 0,
+      total_account_count: 0
+    };
+
+    // Update entire family calculations in the family section itself
+    if ($('#family-calc-savings')) $('#family-calc-savings').textContent = money(summary.family_savings);
+    if ($('#family-calc-spend')) $('#family-calc-spend').textContent = money(summary.family_spend);
+    if ($('#family-calc-debt')) $('#family-calc-debt').textContent = money(summary.family_debt);
+    if ($('#family-calc-credit')) $('#family-calc-credit').textContent = money(summary.family_credit);
+    if ($('#family-calc-networth')) $('#family-calc-networth').textContent = money(summary.family_net_worth);
+
     const active = state.family.filter((member) => member.status === 'active');
+    $('#family-count').textContent = active.length || '';
+    $('#family-total').textContent = `${active.length} ACTIVE / ${state.family.length} PROFILES`;
     $('#family-empty').hidden = active.length > 0;
-    $('#family-table').innerHTML = active.map((member) => `<tr><td><span class="member-cell"><span class="member-avatar">${esc(member.name.charAt(0).toUpperCase())}</span><b>${esc(member.name)}</b></span></td><td>${esc(member.relationship)}</td><td>${Number(member.account_count)} demo accounts</td><td><span class="status-chip success-chip">Active</span></td><td class="align-right"><button class="text-button deactivate-member" data-id="${Number(member.id)}">Deactivate</button></td></tr>`).join('');
+
+    // Render interactive Family Member Cards Grid
+    const cardsGrid = $('#family-cards-grid');
+    if (cardsGrid) {
+      cardsGrid.innerHTML = active.map((member) => {
+        const initial = esc(member.name.charAt(0).toUpperCase());
+        const isSelf = member.relationship.toLowerCase().includes('self');
+        const roleIcon = isSelf ? 'fa-user' : (member.relationship === 'Child' ? 'fa-child' : (member.relationship === 'Partner' ? 'fa-heart' : 'fa-user-group'));
+        return `
+          <div class="family-member-card open-member-dash" data-id="${Number(member.id)}">
+            <div class="member-card-top">
+              <button type="button" class="member-avatar-btn open-member-dash" data-id="${Number(member.id)}" aria-label="View ${esc(member.name)}'s dashboard">
+                <span class="member-avatar">${initial}</span>
+              </button>
+              <div class="member-card-info">
+                <strong class="member-card-name">${esc(member.name)}</strong>
+                <span class="type-chip"><i class="fa-solid ${roleIcon}"></i> ${esc(member.relationship)}</span>
+              </div>
+              <span class="status-chip success-chip">Active</span>
+            </div>
+            <div class="member-card-kpis">
+              <div class="member-kpi-item">
+                <small>Savings</small>
+                <b>${money(member.savings)}</b>
+              </div>
+              <div class="member-kpi-item">
+                <small>Spend</small>
+                <b>${money(member.spend)}</b>
+              </div>
+              <div class="member-kpi-item">
+                <small>Debt / Credit</small>
+                <b class="${(member.debt + member.credit) > 0 ? 'amount-expense' : ''}">${money(member.debt + member.credit)}</b>
+              </div>
+            </div>
+            <div class="member-card-footer">
+              <span class="member-acc-count"><i class="fa-solid fa-wallet"></i> ${Number(member.account_count)} accounts</span>
+              <button type="button" class="primary-button small-button open-member-dash" data-id="${Number(member.id)}">
+                Dashboard <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Render Table View with interactive avatar and clickable names
+    $('#family-table').innerHTML = active.map((member) => {
+      const initial = esc(member.name.charAt(0).toUpperCase());
+      const isSelf = member.relationship.toLowerCase().includes('self');
+      return `
+        <tr>
+          <td>
+            <div class="member-cell open-member-dash" data-id="${Number(member.id)}" style="cursor:pointer;" title="Click to open ${esc(member.name)}'s dashboard">
+              <button type="button" class="member-avatar-btn open-member-dash" data-id="${Number(member.id)}">
+                <span class="member-avatar">${initial}</span>
+              </button>
+              <div>
+                <b class="member-link-text">${esc(member.name)}</b>
+                <small style="display:block; color:#64748b; font-size:10px;">Click to view dashboard</small>
+              </div>
+            </div>
+          </td>
+          <td><span class="type-chip">${esc(member.relationship)}</span></td>
+          <td><b class="amount-income">${money(member.savings)}</b></td>
+          <td><b>${money(member.spend)}</b></td>
+          <td><b class="${(member.debt + member.credit) > 0 ? 'amount-expense' : ''}">${money(member.debt + member.credit)}</b></td>
+          <td>${Number(member.account_count)} accounts</td>
+          <td><span class="status-chip success-chip">Active</span></td>
+          <td class="align-right">
+            <div style="display:inline-flex; gap:6px; align-items:center;">
+              <button class="outline-button small-button open-member-dash" type="button" data-id="${Number(member.id)}"><i class="fa-solid fa-gauge"></i> Dashboard</button>
+              ${!isSelf ? `<button class="text-button deactivate-member" type="button" data-id="${Number(member.id)}" title="Deactivate profile">Deactivate</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Update the quick switcher in member dashboard
+    const switcher = $('#member-select-switcher');
+    if (switcher) {
+      switcher.innerHTML = active.map((m) => `<option value="${m.id}">${esc(m.name)} (${esc(m.relationship)})</option>`).join('');
+    }
+
+    if (keepMemberOpen && state.selectedFamilyMemberId) {
+      await openFamilyMemberDashboard(state.selectedFamilyMemberId);
+    } else if (!keepMemberOpen) {
+      $('#family-main-view').hidden = false;
+      $('#family-member-view').hidden = true;
+    }
+  }
+
+  async function openFamilyMemberDashboard(memberId) {
+    state.selectedFamilyMemberId = Number(memberId);
+    const data = await api(`/api/family/${Number(memberId)}/dashboard`);
+    const member = data.member;
+    const metrics = data.metrics;
+    const accounts = data.accounts || [];
+    const transactions = data.transactions || [];
+
+    // Switch views
+    $('#family-main-view').hidden = true;
+    $('#family-member-view').hidden = false;
+    $('#family-form-panel').hidden = true;
+
+    // Header info
+    $('#member-dash-avatar').textContent = member.name.charAt(0).toUpperCase();
+    $('#member-dash-name').textContent = member.name;
+    $('#member-dash-relation').textContent = member.relationship;
+    $('#member-dash-accounts-count').textContent = `${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'} linked`;
+    $('#member-dash-status').textContent = member.status === 'active' ? 'Active' : 'Inactive';
+
+    // Metrics
+    $('#member-dash-savings').textContent = money(metrics.savings);
+    $('#member-dash-spend').textContent = money(metrics.spend);
+    $('#member-dash-debt').textContent = money(metrics.debt);
+    $('#member-dash-credit').textContent = money(metrics.credit);
+    $('#member-dash-investments').textContent = money(metrics.investments);
+    $('#member-dash-net').textContent = money(metrics.net_balance);
+    $('#member-dash-net').classList.toggle('amount-expense', metrics.net_balance < 0);
+
+    // Switcher sync
+    const switcher = $('#member-select-switcher');
+    if (switcher) {
+      switcher.value = String(member.id);
+    }
+
+    // Accounts list
+    const accTable = $('#member-accounts-table');
+    const accEmpty = $('#member-accounts-empty');
+    if (accTable && accEmpty) {
+      accEmpty.hidden = accounts.length > 0;
+      accTable.innerHTML = accounts.map((acc) => {
+        const bal = Number(acc.balance);
+        const balClass = bal < 0 ? 'amount-expense' : (bal > 0 ? 'amount-income' : '');
+        return `
+          <tr>
+            <td>
+              <span class="institution-cell">
+                <span class="account-icon"><i class="fa-solid ${icons[acc.account_type] || 'fa-wallet'}"></i></span>
+                <span><b>${esc(acc.institution)}</b><small>Mock provider</small></span>
+              </span>
+            </td>
+            <td><span class="type-chip">${esc(acc.account_type)}</span></td>
+            <td class="masked">${esc(acc.masked_number)}</td>
+            <td class="align-right"><b class="${balClass}">${money(acc.balance)}</b></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Transactions list
+    const txTable = $('#member-tx-table');
+    const txEmpty = $('#member-tx-empty');
+    const txCount = $('#member-tx-count');
+    if (txTable && txEmpty) {
+      txEmpty.hidden = transactions.length > 0;
+      if (txCount) txCount.textContent = `${transactions.length} entries`;
+      txTable.innerHTML = transactions.map((t) => {
+        const isIncome = t.direction === 'income';
+        return `
+          <tr>
+            <td>
+              <span class="transaction-cell">
+                <span class="transaction-glyph ${isIncome ? 'amount-income' : 'amount-expense'}">
+                  <i class="fa-solid ${isIncome ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                </span>
+                <b>${esc(t.description)}</b>
+              </span>
+            </td>
+            <td><span class="type-chip">${esc(t.category)}</span></td>
+            <td><span>${esc(t.institution)}<small class="table-sub">${esc(t.masked_number)}</small></span></td>
+            <td>${dateLabel(t.transaction_date)}</td>
+            <td class="align-right"><b class="${isIncome ? 'amount-income' : ''}">${isIncome ? '+' : '−'}${money(t.amount)}</b></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Scroll smoothly to member dashboard
+    $('#family-member-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openLinkAccountDialog(memberId, memberName) {
+    const dialog = $('#family-account-dialog');
+    if (!dialog) return;
+    $('#family-account-member-id').value = memberId;
+    $('#family-account-member-name').textContent = memberName;
+    $('#family-account-error').textContent = '';
+    const form = $('#family-account-form');
+    if (form) form.reset();
+    $('#family-account-member-id').value = memberId;
+    dialog.showModal();
   }
 
   async function loadAccounts() {
@@ -776,6 +988,14 @@
       } catch (error) { handleError(error); }
       return;
     }
+    const openDash = event.target.closest('.open-member-dash');
+    if (openDash) {
+      const memberId = Number(openDash.dataset.id);
+      if (memberId) {
+        await openFamilyMemberDashboard(memberId);
+        return;
+      }
+    }
     const simulate = event.target.closest('.simulate-payment');
     if (simulate) { await createPayment(simulate.dataset.id); return; }
     const markRead = event.target.closest('.mark-read');
@@ -934,6 +1154,62 @@
       toast('Family profile added. No account was connected.');
     } catch (error) {
       handleError(error);
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  $('#member-back-button')?.addEventListener('click', () => {
+    $('#family-member-view').hidden = true;
+    $('#family-main-view').hidden = false;
+    state.selectedFamilyMemberId = null;
+    $('#screen-family').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  $('#member-select-switcher')?.addEventListener('change', (event) => {
+    const id = Number(event.target.value);
+    if (id) openFamilyMemberDashboard(id);
+  });
+
+  $('#member-link-account-btn')?.addEventListener('click', () => {
+    if (!state.selectedFamilyMemberId) return;
+    const m = state.family.find((x) => Number(x.id) === state.selectedFamilyMemberId);
+    openLinkAccountDialog(state.selectedFamilyMemberId, m ? m.name : 'Member');
+  });
+
+  $('#member-add-account-sub-btn')?.addEventListener('click', () => {
+    if (!state.selectedFamilyMemberId) return;
+    const m = state.family.find((x) => Number(x.id) === state.selectedFamilyMemberId);
+    openLinkAccountDialog(state.selectedFamilyMemberId, m ? m.name : 'Member');
+  });
+
+  $('#family-account-dialog-close')?.addEventListener('click', () => {
+    $('#family-account-dialog').close();
+  });
+
+  $('#family-account-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget || event.target;
+    const memberId = Number(form.family_member_id.value);
+    const body = {
+      family_member_id: memberId,
+      institution: form.institution.value.trim(),
+      account_type: form.account_type.value,
+      masked_number: form.masked_number.value.trim(),
+      balance: parseFloat(form.balance.value) || 0,
+    };
+    const errorEl = $('#family-account-error');
+    if (errorEl) errorEl.textContent = '';
+    const submitBtn = $('#family-account-submit');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await api('/api/accounts', { method: 'POST', body });
+      $('#family-account-dialog').close();
+      toast('Demo account successfully connected!');
+      await loadFamily(true);
+      await loadAccounts();
+    } catch (err) {
+      if (errorEl) errorEl.textContent = err.message || 'Could not link account.';
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }

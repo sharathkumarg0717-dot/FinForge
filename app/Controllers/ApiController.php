@@ -139,6 +139,20 @@ final class ApiController
         if ($path === '/api/accounts' && $method === 'GET') {
             Http::json(['data' => $this->finance->accountList($userId)]);
         }
+        if ($path === '/api/accounts' && $method === 'POST') {
+            $body = Http::body();
+            $memberId = (int)($body['family_member_id'] ?? 0);
+            if ($memberId <= 0) {
+                Http::error('Choose a valid family member for this account.');
+            }
+            try {
+                $accountId = $this->finance->createAccount($userId, $body);
+                $this->audit($userId, 'account.created', 'financial_account', $accountId);
+                Http::json(['data' => ['id' => $accountId, 'success' => true]], 201);
+            } catch (\InvalidArgumentException $e) {
+                Http::error($e->getMessage(), 'invalid_input', 400);
+            }
+        }
         if ($path === '/api/transactions' && $method === 'GET') {
             $category = trim((string)($_GET['category'] ?? ''));
             if (strlen($category) > 240) {
@@ -149,8 +163,18 @@ final class ApiController
         if ($path === '/api/investments' && $method === 'GET') {
             Http::json(['data' => $this->finance->holdings($userId)]);
         }
+        if ($path === '/api/family-overview' && $method === 'GET') {
+            Http::json(['data' => $this->finance->familyOverview($userId)]);
+        }
         if ($path === '/api/family' && $method === 'GET') {
             Http::json(['data' => $this->finance->family($userId)]);
+        }
+        if (preg_match('#^/api/family/(\d+)/dashboard$#', $path, $match) && $method === 'GET') {
+            $dashboard = $this->finance->familyMemberDashboard($userId, (int)$match[1]);
+            if ($dashboard === null) {
+                Http::error('Family member not found.', 'not_found', 404);
+            }
+            Http::json(['data' => $dashboard]);
         }
         if ($path === '/api/family' && $method === 'POST') {
             $body = Http::body();

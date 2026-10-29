@@ -12,7 +12,7 @@ final class FinanceRepository
     public function accountList(int $userId): array
     {
         $statement = $this->db->prepare(
-            'SELECT a.id, a.institution, a.account_type, a.masked_number, a.balance, a.currency, a.last_synced_at, '
+            'SELECT a.id, a.family_member_id, a.institution, a.account_type, a.masked_number, a.balance, a.currency, a.last_synced_at, '
             . 'm.name AS member_name FROM financial_accounts a '
             . 'JOIN family_members m ON m.id = a.family_member_id AND m.user_id = a.user_id '
             . 'WHERE a.user_id = :user_id AND a.status = "active" AND m.status = "active" ORDER BY a.account_type, a.institution'
@@ -48,6 +48,315 @@ final class FinanceRepository
         );
         $statement->execute(['user_id' => $userId]);
         return $statement->fetchAll();
+    }
+
+    public function familyOverview(int $userId): array
+    {
+        $membersStmt = $this->db->prepare(
+            'SELECT m.id, m.name, m.relationship, m.email, m.status, m.created_at '
+            . 'FROM family_members m WHERE m.user_id = :user_id ORDER BY m.id'
+        );
+        $membersStmt->execute(['user_id' => $userId]);
+        $members = $membersStmt->fetchAll();
+
+        $accountsStmt = $this->db->prepare(
+            'SELECT a.id, a.family_member_id, a.institution, a.account_type, a.masked_number, a.balance, a.currency, a.status '
+            . 'FROM financial_accounts a WHERE a.user_id = :user_id AND a.status = "active"'
+        );
+        $accountsStmt->execute(['user_id' => $userId]);
+        $allAccounts = $accountsStmt->fetchAll();
+
+        $accountsByMember = [];
+        foreach ($allAccounts as $acc) {
+            $memId = (int)$acc['family_member_id'];
+            $accountsByMember[$memId][] = $acc;
+        }
+
+        $txStmt = $this->db->prepare(
+            'SELECT t.amount, t.direction, a.family_member_id '
+            . 'FROM transactions t JOIN financial_accounts a ON a.id = t.account_id '
+            . 'WHERE t.user_id = :user_id'
+        );
+        $txStmt->execute(['user_id' => $userId]);
+        $allTxs = $txStmt->fetchAll();
+
+        $txByMember = [];
+        foreach ($allTxs as $tx) {
+            $memId = (int)$tx['family_member_id'];
+            $txByMember[$memId][] = $tx;
+        }
+
+        $holdingsStmt = $this->db->prepare(
+            'SELECT h.market_value, a.family_member_id '
+            . 'FROM investment_holdings h JOIN financial_accounts a ON a.id = h.account_id '
+            . 'WHERE h.user_id = :user_id'
+        );
+        $holdingsStmt->execute(['user_id' => $userId]);
+        $allHoldings = $holdingsStmt->fetchAll();
+
+        $holdingsByMember = [];
+        foreach ($allHoldings as $h) {
+            $memId = (int)$h['family_member_id'];
+            $holdingsByMember[$memId][] = $h;
+        }
+
+        $familySavings = 0.0;
+        $familySpend = 0.0;
+        $familyDebt = 0.0;
+        $familyCredit = 0.0;
+        $familyInvestments = 0.0;
+
+        $memberData = [];
+        foreach ($members as $member) {
+            $mId = (int)$member['id'];
+            $isActive = ($member['status'] === 'active');
+            $memAccounts = $accountsByMember[$mId] ?? [];
+            $memTxs = $txByMember[$mId] ?? [];
+            $memHoldings = $holdingsByMember[$mId] ?? [];
+
+            $mSavings = 0.0;
+            $mDebt = 0.0;
+            $mCredit = 0.0;
+            $mInvestments = 0.0;
+
+            foreach ($memAccounts as $acc) {
+                $bal = (float)$acc['balance'];
+                $type = $acc['account_type'];
+                if (in_array($type, ['checking', 'savings', 'wallet'], true)) {
+                    if ($bal > 0) {
+                        $mSavings += $bal;
+                    }
+                } elseif ($type === 'investment') {
+                    if ($bal > 0) {
+                        $mInvestments += $bal;
+                    }
+                } elseif ($type === 'credit') {
+                    $mCredit += abs($bal);
+                } elseif ($type === 'loan') {
+                    $mDebt += abs($bal);
+                }
+            }
+
+            $holdingTotal = 0.0;
+            foreach ($memHoldings as $h) {
+                $holdingTotal += (float)$h['market_value'];
+            }
+            if ($holdingTotal > 0 && $mInvestments === 0.0) {
+                $mInvestments = $holdingTotal;
+            }
+
+            $mSpend = 0.0;
+            $mIncome = 0.0;
+            foreach ($memTxs as $tx) {
+                $amt = (float)$tx['amount'];
+                if ($tx['direction'] === 'expense') {
+                    $mSpend += $amt;
+                } elseif ($tx['direction'] === 'income') {
+                    $mIncome += $amt;
+                }
+            }
+
+            $netBalance = ($mSavings + $mInvestments) - ($mDebt + $mCredit);
+
+            if ($isActive) {
+                $familySavings += $mSavings;
+                $familySpend += $mSpend;
+                $familyDebt += $mDebt;
+                $familyCredit += $mCredit;
+                $familyInvestments += $mInvestments;
+            }
+
+            $memberData[] = [
+                'id' => $mId,
+                'name' => $member['name'],
+                'relationship' => $member['relationship'],
+                'email' => $member['email'] ?? '',
+                'status' => $member['status'],
+                'account_count' => count($memAccounts),
+                'savings' => round($mSavings, 2),
+                'spend' => round($mSpend, 2),
+                'income' => round($mIncome, 2),
+                'debt' => round($mDebt, 2),
+                'credit' => round($mCredit, 2),
+                'investments' => round($mInvestments, 2),
+                'net_balance' => round($netBalance, 2),
+            ];
+        }
+
+        $activeCount = count(array_filter($members, static fn($m) => $m['status'] === 'active'));
+        $familyNetWorth = ($familySavings + $familyInvestments) - ($familyDebt + $familyCredit);
+
+        return [
+            'summary' => [
+                'family_savings' => round($familySavings, 2),
+                'family_spend' => round($familySpend, 2),
+                'family_debt' => round($familyDebt, 2),
+                'family_credit' => round($familyCredit, 2),
+                'family_investments' => round($familyInvestments, 2),
+                'family_net_worth' => round($familyNetWorth, 2),
+                'active_member_count' => $activeCount,
+                'total_account_count' => count($allAccounts),
+            ],
+            'members' => $memberData,
+        ];
+    }
+
+    public function familyMemberDashboard(int $userId, int $memberId): ?array
+    {
+        $memberStmt = $this->db->prepare(
+            'SELECT id, name, relationship, email, status, created_at FROM family_members '
+            . 'WHERE id = :id AND user_id = :user_id'
+        );
+        $memberStmt->execute(['id' => $memberId, 'user_id' => $userId]);
+        $member = $memberStmt->fetch();
+        if (!$member) {
+            return null;
+        }
+
+        $accStmt = $this->db->prepare(
+            'SELECT id, institution, account_type, masked_number, balance, currency, status, last_synced_at '
+            . 'FROM financial_accounts WHERE family_member_id = :member_id AND user_id = :user_id AND status = "active" '
+            . 'ORDER BY account_type, institution'
+        );
+        $accStmt->execute(['member_id' => $memberId, 'user_id' => $userId]);
+        $accounts = $accStmt->fetchAll();
+
+        $accountIds = array_map(static fn($a) => (int)$a['id'], $accounts);
+
+        $savings = 0.0;
+        $investments = 0.0;
+        $debt = 0.0;
+        $credit = 0.0;
+
+        foreach ($accounts as $acc) {
+            $bal = (float)$acc['balance'];
+            $type = $acc['account_type'];
+            if (in_array($type, ['checking', 'savings', 'wallet'], true)) {
+                if ($bal > 0) {
+                    $savings += $bal;
+                }
+            } elseif ($type === 'investment') {
+                if ($bal > 0) {
+                    $investments += $bal;
+                }
+            } elseif ($type === 'credit') {
+                $credit += abs($bal);
+            } elseif ($type === 'loan') {
+                $debt += abs($bal);
+            }
+        }
+
+        $holdings = [];
+        if (!empty($accountIds)) {
+            $inClause = implode(',', $accountIds);
+            $holdingsStmt = $this->db->prepare(
+                "SELECT h.id, h.instrument, h.symbol, h.units, h.price, h.market_value, h.valuation_date, a.institution, a.masked_number "
+                . "FROM investment_holdings h JOIN financial_accounts a ON a.id = h.account_id "
+                . "WHERE h.account_id IN ($inClause) AND h.user_id = :user_id ORDER BY h.market_value DESC"
+            );
+            $holdingsStmt->execute(['user_id' => $userId]);
+            $holdings = $holdingsStmt->fetchAll();
+        }
+
+        $holdingsSum = array_sum(array_map(static fn($h) => (float)$h['market_value'], $holdings));
+        if ($holdingsSum > 0 && $investments === 0.0) {
+            $investments = $holdingsSum;
+        }
+
+        $transactions = [];
+        $spend = 0.0;
+        $income = 0.0;
+        if (!empty($accountIds)) {
+            $inClause = implode(',', $accountIds);
+            $txStmt = $this->db->prepare(
+                "SELECT t.id, t.account_id, t.amount, t.direction, t.category, t.description, t.transaction_date, "
+                . "a.institution, a.masked_number "
+                . "FROM transactions t JOIN financial_accounts a ON a.id = t.account_id "
+                . "WHERE t.account_id IN ($inClause) AND t.user_id = :user_id "
+                . "ORDER BY t.transaction_date DESC, t.id DESC LIMIT 40"
+            );
+            $txStmt->execute(['user_id' => $userId]);
+            $transactions = $txStmt->fetchAll();
+
+            foreach ($transactions as $t) {
+                if ($t['direction'] === 'expense') {
+                    $spend += (float)$t['amount'];
+                } elseif ($t['direction'] === 'income') {
+                    $income += (float)$t['amount'];
+                }
+            }
+        }
+
+        $netBalance = ($savings + $investments) - ($debt + $credit);
+
+        return [
+            'member' => [
+                'id' => (int)$member['id'],
+                'name' => $member['name'],
+                'relationship' => $member['relationship'],
+                'email' => $member['email'] ?? '',
+                'status' => $member['status'],
+                'created_at' => $member['created_at'],
+            ],
+            'metrics' => [
+                'savings' => round($savings, 2),
+                'spend' => round($spend, 2),
+                'income' => round($income, 2),
+                'debt' => round($debt, 2),
+                'credit' => round($credit, 2),
+                'investments' => round($investments, 2),
+                'net_balance' => round($netBalance, 2),
+                'account_count' => count($accounts),
+                'transaction_count' => count($transactions),
+            ],
+            'accounts' => $accounts,
+            'transactions' => $transactions,
+            'holdings' => $holdings,
+        ];
+    }
+
+    public function createAccount(int $userId, array $data): int
+    {
+        $memberId = (int)$data['family_member_id'];
+        $check = $this->db->prepare('SELECT id FROM family_members WHERE id = :id AND user_id = :user_id');
+        $check->execute(['id' => $memberId, 'user_id' => $userId]);
+        if (!$check->fetchColumn()) {
+            throw new \InvalidArgumentException('Family member does not exist.');
+        }
+
+        $institution = trim((string)($data['institution'] ?? 'Demo Bank'));
+        if ($institution === '') {
+            $institution = 'Demo Bank';
+        }
+        $accountType = trim((string)($data['account_type'] ?? 'savings'));
+        if (!in_array($accountType, ['checking', 'savings', 'credit', 'investment', 'loan', 'wallet'], true)) {
+            $accountType = 'savings';
+        }
+        $masked = trim((string)($data['masked_number'] ?? ''));
+        if ($masked === '') {
+            $masked = '•••• ' . str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
+        } elseif (!str_starts_with($masked, '•')) {
+            $last4 = substr(preg_replace('/\D/', '', $masked), -4);
+            $masked = '•••• ' . ($last4 ?: str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT));
+        }
+        $balance = (float)($data['balance'] ?? 0.0);
+        if (in_array($accountType, ['credit', 'loan'], true) && $balance > 0) {
+            $balance = -$balance;
+        }
+
+        $statement = $this->db->prepare(
+            'INSERT INTO financial_accounts (user_id, family_member_id, provider_key, institution, account_type, masked_number, balance, currency, last_synced_at, is_demo) '
+            . 'VALUES (:user_id, :member_id, "mock_bank", :institution, :account_type, :masked_number, :balance, "INR", NOW(), 1)'
+        );
+        $statement->execute([
+            'user_id' => $userId,
+            'member_id' => $memberId,
+            'institution' => $institution,
+            'account_type' => $accountType,
+            'masked_number' => $masked,
+            'balance' => $balance,
+        ]);
+        return (int)$this->db->lastInsertId();
     }
 
     public function holdings(int $userId): array
