@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-// FinSync Database Diagnostic Tool for InfinityFree & Hosting Providers
+// FinForge Database Diagnostic Tool for InfinityFree & Hosting Providers
 header('Content-Type: text/html; charset=utf-8');
 
 require_once dirname(__DIR__) . '/app/Core/Database.php';
@@ -46,7 +46,7 @@ if ($hasConfig) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FinSync Database Diagnostic</title>
+    <title>FinForge Database Diagnostic</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 30px; margin: 0; }
         .card { max-width: 680px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border: 1px solid #334155; }
@@ -68,7 +68,7 @@ if ($hasConfig) {
 <body>
     <div class="card">
         <h1>
-            <span>FinSync Database Connection Test</span>
+            <span>FinForge Database Connection Test</span>
             <?php if ($connectionStatus === 'SUCCESS'): ?>
                 <span class="badge badge-success">CONNECTED</span>
             <?php elseif ($connectionStatus === 'CONFIG_MISSING'): ?>

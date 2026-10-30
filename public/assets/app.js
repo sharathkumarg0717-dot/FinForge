@@ -173,7 +173,7 @@
       goTo('personal-finance');
     } catch (error) {
       showAuth();
-      $('#auth-message').textContent = error.message || 'Could not reach the local FinSync service.';
+      $('#auth-message').textContent = error.message || 'Could not reach the local FinForge service.';
     }
   }
 
@@ -921,7 +921,7 @@
     $('#reminder-count').textContent = unread ? String(unread) : '';
     $('#notification-dot').hidden = unread === 0;
     $('#recurring-table').innerHTML = recurring.map((item) => `<tr><td><b>${esc(item.name)}</b><small class="table-sub">Synthetic schedule</small></td><td><span class="type-chip">${esc(item.cadence)}</span></td><td>${dateLabel(item.next_due_date)}</td><td class="align-right"><b>${money(item.amount)}</b></td><td class="align-right"><button class="outline-button small-button simulate-payment" data-id="${Number(item.id)}"><i class="fa-solid fa-flask"></i> Simulate</button></td></tr>`).join('');
-    $('#notifications-list').innerHTML = notifications.length ? notifications.map((item) => `<div class="notification-row ${Number(item.is_read) ? 'notification-read' : ''}"><span class="notification-icon"><i class="fa-regular ${item.type === 'reminder' ? 'fa-calendar' : 'fa-circle-info'}"></i></span><span class="notification-copy"><b>${esc(item.message)}</b><small>${item.due_date ? `Due ${dateLabel(item.due_date)}` : 'FinSync demo notice'}</small></span>${Number(item.is_read) ? '<span class="read-label">Read</span>' : `<button class="text-button mark-read" data-id="${Number(item.id)}">Mark read</button>`}</div>`).join('') : '<div class="empty-state"><p>No notifications.</p></div>';
+    $('#notifications-list').innerHTML = notifications.length ? notifications.map((item) => `<div class="notification-row ${Number(item.is_read) ? 'notification-read' : ''}"><span class="notification-icon"><i class="fa-regular ${item.type === 'reminder' ? 'fa-calendar' : 'fa-circle-info'}"></i></span><span class="notification-copy"><b>${esc(item.message)}</b><small>${item.due_date ? `Due ${dateLabel(item.due_date)}` : 'FinForge demo notice'}</small></span>${Number(item.is_read) ? '<span class="read-label">Read</span>' : `<button class="text-button mark-read" data-id="${Number(item.id)}">Mark read</button>`}</div>`).join('') : '<div class="empty-state"><p>No notifications.</p></div>';
   }
 
   async function loadPayments() {
@@ -953,17 +953,17 @@
     input.value = '';
     const pending = document.createElement('div');
     pending.className = 'chat-bubble assistant-bubble pending-bubble';
-    pending.innerHTML = '<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync insight</b><p><i class="fa-solid fa-circle-notch fa-spin"></i> Reviewing your demo snapshot…</p></div>';
+    pending.innerHTML = '<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight</b><p><i class="fa-solid fa-circle-notch fa-spin"></i> Reviewing your demo snapshot…</p></div>';
     messages.append(pending);
     messages.scrollTop = messages.scrollHeight;
     try {
       const result = await api('/api/advisor', { method: 'POST', body: { question } });
       pending.classList.remove('pending-bubble');
-      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync insight · Local fallback</b><p>${esc(result.answer)}</p><small>${esc(result.disclaimer)}</small></div>`;
+      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight · Local fallback</b><p>${esc(result.answer)}</p><small>${esc(result.disclaimer)}</small></div>`;
     } catch (error) {
       pending.classList.remove('pending-bubble');
       pending.classList.add('error-bubble');
-      pending.innerHTML = `<span class="chat-avatar error-avatar"><i class="fa-solid fa-circle-exclamation"></i></span><div><b>FinSync insight</b><p class="chat-error-text">${esc(error.message || 'Unable to generate insight at this time. Please try again.')}</p></div>`;
+      pending.innerHTML = `<span class="chat-avatar error-avatar"><i class="fa-solid fa-circle-exclamation"></i></span><div><b>FinForge insight</b><p class="chat-error-text">${esc(error.message || 'Unable to generate insight at this time. Please try again.')}</p></div>`;
       handleError(error);
     } finally {
       if (submitBtn) submitBtn.disabled = false;

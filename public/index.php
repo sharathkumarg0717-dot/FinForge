@@ -79,7 +79,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101b33">
-  <title>FinSync — Family finances, in focus</title>
+  <title>FinForge — Family finances, in focus</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
   <link rel="preconnect" href="https://accounts.google.com">
@@ -94,20 +94,20 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 </head>
 <body>
   <div id="auth-view" class="auth-shell" hidden>
-    <section class="auth-brand" aria-label="FinSync introduction">
-      <a class="brand brand-light" href="#" aria-label="FinSync home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
+    <section class="auth-brand" aria-label="FinForge introduction">
+      <a class="brand brand-light" href="#" aria-label="FinForge home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Forge</span></span></a>
       <div class="auth-intro">
         <p class="eyebrow">A clearer view, together</p>
         <h1>Family finances,<br><em>in focus.</em></h1>
         <p>One calm place to understand your household’s demo accounts, cash flow, and upcoming plans.</p>
         <div class="auth-points"><span><i class="fa-solid fa-shield-halved"></i> Private local demo</span><span><i class="fa-solid fa-flask"></i> Synthetic data only</span></div>
       </div>
-      <small>FinSync is an informational demo. No real accounts or payments are connected.</small>
+      <small>FinForge is an informational demo. No real accounts or payments are connected.</small>
     </section>
     <section class="auth-form-wrap">
       <div class="auth-card">
-        <div class="mobile-brand"><a class="brand" href="#"><span class="brand-mark"><i class="fa-solid fa-layer-group"></i></span><span>Fin<span>Sync</span></span></a></div>
-        <div class="auth-heading"><p class="eyebrow">Welcome to FinSync</p><h2 id="auth-title">Sign in to your space</h2><p id="auth-subtitle">A household overview, designed around clarity.</p></div>
+        <div class="mobile-brand"><a class="brand" href="#"><span class="brand-mark"><i class="fa-solid fa-layer-group"></i></span><span>Fin<span>Forge</span></span></a></div>
+        <div class="auth-heading"><p class="eyebrow">Welcome to FinForge</p><h2 id="auth-title">Sign in to your space</h2><p id="auth-subtitle">A household overview, designed around clarity.</p></div>
         <div class="auth-switch" role="tablist" aria-label="Choose sign in or register">
           <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">Sign in</button>
           <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">Create account</button>
@@ -116,7 +116,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <label id="name-field" hidden>Your name<input name="name" autocomplete="name" maxlength="120" placeholder="e.g. Alex Morgan"></label>
           <label>Email address<input name="email" type="email" autocomplete="email" maxlength="190" required placeholder="you@example.com"></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="200" required placeholder="At least 10 characters"></label>
-          <label id="consent-field" class="check-line" hidden><input name="consent_demo" type="checkbox"><span>I agree to use only FinSync’s synthetic demo family-finance records. I understand this does not connect real accounts.</span></label>
+          <label id="consent-field" class="check-line" hidden><input name="consent_demo" type="checkbox"><span>I agree to use only FinForge’s synthetic demo family-finance records. I understand this does not connect real accounts.</span></label>
           <button id="auth-submit" class="primary-button full-button" type="submit"><span>Sign in</span><i class="fa-solid fa-arrow-right"></i></button>
           <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
         </form>
@@ -140,7 +140,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
   <div id="app-view" class="app-shell" hidden>
     <aside class="sidebar" id="sidebar">
-      <a class="brand sidebar-brand" href="#" data-nav="personal-finance" aria-label="FinSync personal finance dashboard"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
+      <a class="brand sidebar-brand" href="#" data-nav="personal-finance" aria-label="FinForge personal finance dashboard"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Forge</span></span></a>
       <div class="workspace-label">WORKSPACE</div>
       <nav class="side-nav" aria-label="Main navigation">
         <button class="nav-link active" data-nav="personal-finance"><i class="fa-solid fa-chart-pie"></i><span>My finances</span></button>
@@ -159,13 +159,13 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
       </nav>
       <div class="sidebar-bottom">
         <div class="demo-sidebar"><span class="demo-dot"></span><span><b>Private local workspace</b><small>Personal + demo data are separate</small></span></div>
-        <div class="profile-row"><span class="avatar" id="profile-avatar">F</span><span class="profile-meta"><b id="profile-name">FinSync user</b><small id="profile-email"></small></span><button id="logout-button" class="icon-button" aria-label="Sign out" title="Sign out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button></div>
+        <div class="profile-row"><span class="avatar" id="profile-avatar">F</span><span class="profile-meta"><b id="profile-name">FinForge user</b><small id="profile-email"></small></span><button id="logout-button" class="icon-button" aria-label="Sign out" title="Sign out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button></div>
       </div>
     </aside>
     <div class="main-column">
       <header class="topbar">
         <button id="mobile-menu" class="icon-button menu-button" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
-        <div class="breadcrumbs"><span>FinSync</span><i class="fa-solid fa-chevron-right"></i><b id="page-crumb">Overview</b></div>
+        <div class="breadcrumbs"><span>FinForge</span><i class="fa-solid fa-chevron-right"></i><b id="page-crumb">Overview</b></div>
         <div class="topbar-actions"><span class="demo-pill"><span class="demo-dot"></span> <span id="workspace-mode-label">PERSONAL DATA</span></span><button class="icon-button notification-button" data-nav="reminders" aria-label="Open reminders"><i class="fa-regular fa-bell"></i><span id="notification-dot" class="notification-dot" hidden></span></button><span class="top-date" id="today-label"></span></div>
       </header>
       <main class="content" id="main-content">
@@ -816,8 +816,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-advisor" hidden>
-          <div class="page-heading"><div><p class="eyebrow">SAFE, INFORMATIVE, GROUNDED IN YOUR DEMO</p><h1>AI insights</h1><p class="subtitle">Ask about what’s visible in your consent-authorized FinSync workspace.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Local fallback</span></div>
-          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL WELLNESS, WITHOUT THE NOISE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s demo advisor summarizes only the synthetic records available in your workspace. It does not make trades or take actions.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Uses authorized demo data</span><span><i class="fa-solid fa-check"></i> Explains where figures come from</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync</h2><p>Safe deterministic fallback is ready</p></div><span class="online-indicator"><i></i> AVAILABLE</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync insight</b><p>Hi <span id="advisor-name">there</span>! I can summarize your synthetic cash flow or net-worth snapshot. What would you like to understand?</p></div></div></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your demo records</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational demo only—not financial, tax, investment, or legal advice. Verify important decisions with a qualified professional.</p></article></div>
+          <div class="page-heading"><div><p class="eyebrow">SAFE, INFORMATIVE, GROUNDED IN YOUR DEMO</p><h1>AI insights</h1><p class="subtitle">Ask about what’s visible in your consent-authorized FinForge workspace.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Local fallback</span></div>
+          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL WELLNESS, WITHOUT THE NOISE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinForge’s demo advisor summarizes only the synthetic records available in your workspace. It does not make trades or take actions.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Uses authorized demo data</span><span><i class="fa-solid fa-check"></i> Explains where figures come from</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinForge</h2><p>Safe deterministic fallback is ready</p></div><span class="online-indicator"><i></i> AVAILABLE</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight</b><p>Hi <span id="advisor-name">there</span>! I can summarize your synthetic cash flow or net-worth snapshot. What would you like to understand?</p></div></div></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your demo records</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational demo only—not financial, tax, investment, or legal advice. Verify important decisions with a qualified professional.</p></article></div>
         </section>
 
         <section class="screen" id="screen-payments" hidden>
@@ -827,12 +827,12 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-consent" hidden>
-          <div class="page-heading"><div><p class="eyebrow">YOUR DATA, YOUR DECISION</p><h1>Privacy &amp; consent</h1><p class="subtitle">Control whether FinSync can show the synthetic family-finance records in this workspace.</p></div><span id="consent-status-badge" class="status-chip neutral-chip">Checking status</span></div>
-          <article class="consent-card"><div class="consent-card-icon"><i class="fa-solid fa-shield-heart"></i></div><div class="consent-card-copy"><p class="eyebrow">FINANCIAL DATA ACCESS</p><h2>View synthetic household records</h2><p>When enabled, FinSync displays demo accounts, transaction history, holdings, recurring items, and summaries created for this workspace. The demo does not connect to a bank, broker, or real person’s financial account.</p><ul><li>Consent is checked by the server before synthetic financial data is returned.</li><li>Revoking access pauses synthetic dashboard, advisor, and demo-finance views, but never changes your personal finance records.</li><li>Changing this setting never authorizes a real provider connection or payment.</li></ul></div><div class="consent-control"><span id="consent-toggle-label">Consent is off</span><button id="consent-toggle" class="toggle-button" role="switch" aria-checked="false" aria-label="Grant or revoke demo financial-data consent"><span></span></button></div></article>
-          <article class="panel privacy-details"><div class="panel-heading"><div><h2>Data boundaries</h2><p>What this local prototype does—and does not—do.</p></div></div><div class="boundary-grid"><div><i class="fa-solid fa-database"></i><b>Local MySQL</b><p>Profile and synthetic app records are stored in the XAMPP database you configure.</p></div><div><i class="fa-solid fa-plug-circle-xmark"></i><b>No live providers</b><p>Mock adapters normalize fixture data only. FinSync never asks for bank credentials.</p></div><div><i class="fa-solid fa-credit-card"></i><b>No real money</b><p>Payment and renewal flows only create demo receipts in your local database.</p></div></div></article>
+          <div class="page-heading"><div><p class="eyebrow">YOUR DATA, YOUR DECISION</p><h1>Privacy &amp; consent</h1><p class="subtitle">Control whether FinForge can show the synthetic family-finance records in this workspace.</p></div><span id="consent-status-badge" class="status-chip neutral-chip">Checking status</span></div>
+          <article class="consent-card"><div class="consent-card-icon"><i class="fa-solid fa-shield-heart"></i></div><div class="consent-card-copy"><p class="eyebrow">FINANCIAL DATA ACCESS</p><h2>View synthetic household records</h2><p>When enabled, FinForge displays demo accounts, transaction history, holdings, recurring items, and summaries created for this workspace. The demo does not connect to a bank, broker, or real person’s financial account.</p><ul><li>Consent is checked by the server before synthetic financial data is returned.</li><li>Revoking access pauses synthetic dashboard, advisor, and demo-finance views, but never changes your personal finance records.</li><li>Changing this setting never authorizes a real provider connection or payment.</li></ul></div><div class="consent-control"><span id="consent-toggle-label">Consent is off</span><button id="consent-toggle" class="toggle-button" role="switch" aria-checked="false" aria-label="Grant or revoke demo financial-data consent"><span></span></button></div></article>
+          <article class="panel privacy-details"><div class="panel-heading"><div><h2>Data boundaries</h2><p>What this local prototype does—and does not—do.</p></div></div><div class="boundary-grid"><div><i class="fa-solid fa-database"></i><b>Local MySQL</b><p>Profile and synthetic app records are stored in the XAMPP database you configure.</p></div><div><i class="fa-solid fa-plug-circle-xmark"></i><b>No live providers</b><p>Mock adapters normalize fixture data only. FinForge never asks for bank credentials.</p></div><div><i class="fa-solid fa-credit-card"></i><b>No real money</b><p>Payment and renewal flows only create demo receipts in your local database.</p></div></div></article>
         </section>
       </main>
-      <footer class="app-footer"><span>FinSync <span id="footer-year"></span></span><span><i class="fa-solid fa-flask"></i> Local informational demo · Synthetic financial records only</span></footer>
+      <footer class="app-footer"><span>FinForge <span id="footer-year"></span></span><span><i class="fa-solid fa-flask"></i> Local informational demo · Synthetic financial records only</span></footer>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -1025,7 +1025,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
           <div class="auth-safety" style="margin-top:10px;">
             <i class="fa-solid fa-shield-halved"></i>
-            <span>FinSync calculates the SHA-256 checksum and exchanges your token with <code>api.kite.trade</code> securely.</span>
+            <span>FinForge calculates the SHA-256 checksum and exchanges your token with <code>api.kite.trade</code> securely.</span>
           </div>
 
           <p id="zerodha-api-error" class="form-message error-text" role="status" aria-live="polite"></p>

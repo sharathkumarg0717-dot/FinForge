@@ -63,7 +63,7 @@ try {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>FinSync Database Migration</title>
+    <title>FinForge Database Migration</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }
         .card { max-width: 600px; margin: 40px auto; background: #1e293b; padding: 25px; border-radius: 12px; border: 1px solid #334155; }
@@ -92,7 +92,7 @@ try {
                     <li><?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?></li>
                 <?php endforeach; ?>
             </ul>
-            <a href="index.php" class="btn">Return to FinSync Dashboard</a>
+            <a href="index.php" class="btn">Return to FinForge Dashboard</a>
         <?php else: ?>
             <p style="color: #f87171;"><?= htmlspecialchars((string)$error, ENT_QUOTES, 'UTF-8') ?></p>
         <?php endif; ?>

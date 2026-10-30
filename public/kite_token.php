@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 <div class="token-display" id="token-box"><?= htmlspecialchars($accessToken, ENT_QUOTES, 'UTF-8') ?></div>
                 <button type="button" style="background:#3b82f6; margin-top:5px;" onclick="navigator.clipboard.writeText(document.getElementById('token-box').innerText); alert('Access Token Copied!');">Copy Access Token</button>
-                <p style="font-size:12px; color:#cbd5e1; margin-top:10px;">Paste this copied token into the <b>Kite Access Token</b> box on your FinSync website and click Sync!</p>
+                <p style="font-size:12px; color:#cbd5e1; margin-top:10px;">Paste this copied token into the <b>Kite Access Token</b> box on your FinForge website and click Sync!</p>
             </div>
         <?php elseif ($error): ?>
             <div class="error-box">
