@@ -7,7 +7,54 @@ use PDO;
 
 final class FinanceRepository
 {
-    public function __construct(private PDO $db) {}
+    private static bool $schemaEnsured = false;
+
+    public function __construct(private PDO $db)
+    {
+        self::ensureSchema($this->db);
+    }
+
+    public static function ensureSchema(PDO $db): void
+    {
+        if (self::$schemaEnsured) {
+            return;
+        }
+        try {
+            // 1. Ensure financial_accounts has client_id
+            $colsAcc = $db->query("SHOW COLUMNS FROM financial_accounts LIKE 'client_id'")->fetchAll();
+            if (empty($colsAcc)) {
+                $db->exec("ALTER TABLE financial_accounts ADD COLUMN client_id VARCHAR(60) NULL AFTER masked_number");
+            }
+
+            // 2. Ensure investment_holdings has buy_price & pnl
+            $colsBuy = $db->query("SHOW COLUMNS FROM investment_holdings LIKE 'buy_price'")->fetchAll();
+            if (empty($colsBuy)) {
+                $db->exec("ALTER TABLE investment_holdings ADD COLUMN buy_price DECIMAL(14,4) NOT NULL DEFAULT 0.0000 AFTER price");
+            }
+            $colsPnl = $db->query("SHOW COLUMNS FROM investment_holdings LIKE 'pnl'")->fetchAll();
+            if (empty($colsPnl)) {
+                $db->exec("ALTER TABLE investment_holdings ADD COLUMN pnl DECIMAL(14,2) NOT NULL DEFAULT 0.00 AFTER market_value");
+            }
+
+            // 3. Ensure users table has google_id, avatar_url, auth_provider
+            $colsGid = $db->query("SHOW COLUMNS FROM users LIKE 'google_id'")->fetchAll();
+            if (empty($colsGid)) {
+                $db->exec("ALTER TABLE users ADD COLUMN google_id VARCHAR(100) NULL UNIQUE AFTER email");
+            }
+            $colsAvatar = $db->query("SHOW COLUMNS FROM users LIKE 'avatar_url'")->fetchAll();
+            if (empty($colsAvatar)) {
+                $db->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL AFTER google_id");
+            }
+            $colsProvider = $db->query("SHOW COLUMNS FROM users LIKE 'auth_provider'")->fetchAll();
+            if (empty($colsProvider)) {
+                $db->exec("ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'local' AFTER avatar_url");
+            }
+
+            self::$schemaEnsured = true;
+        } catch (\Throwable $e) {
+            error_log('Auto schema migration notice: ' . $e->getMessage());
+        }
+    }
 
     public function accountList(int $userId): array
     {
