@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finsync_web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: finsync
+      DB_USER: finsync_user
+      DB_PASSWORD: finsync_secure_password
+      APP_ENV: production
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - finsync_net
+
+  db:
+    image: mysql:8.0
+    container_name: finsync_db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password
+      MYSQL_DATABASE: finsync
+      MYSQL_USER: finsync_user
+      MYSQL_PASSWORD: finsync_secure_password
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_secure_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - finsync_net
+
+volumes:
+  db_data:
+
+networks:
+  finsync_net:
+    driver: bridge

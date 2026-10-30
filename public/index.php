@@ -82,7 +82,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <link rel="preconnect" href="https://accounts.google.com">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="<?= Security::escape($basePath) ?>/assets/app.css">
+  <link rel="stylesheet" href="<?= Security::escape($basePath) ?>/assets/app.css?v=<?= @filemtime(__DIR__ . '/assets/app.css') ?: '2' ?>">
   <script nonce="<?= Security::escape($nonce) ?>">
     window.FINSYNC_BASE = <?= json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     window.FINSYNC_GOOGLE_CLIENT_ID = <?= json_encode($googleClientId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -1043,6 +1043,6 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
     </article>
   </dialog>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="<?= Security::escape($basePath) ?>/assets/app.js" defer></script>
+  <script src="<?= Security::escape($basePath) ?>/assets/app.js?v=<?= @filemtime(__DIR__ . '/assets/app.js') ?: '2' ?>" defer></script>
 </body>
 </html>

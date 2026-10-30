@@ -187,11 +187,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 [hidden] { display: none !important; }
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar {
-  background: var(--navy);
+  background-color: var(--navy) !important;
   color: #d8e0f0;
   width: 252px;
   flex: 0 0 252px;
-  padding: 27px 15px 20px;
+  padding: 27px 15px 30px;
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -234,7 +234,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .nav-count { margin-left: auto; font-size: 10px; color: #a4b2cb; }
 .beta-badge { margin-left: auto; color: #a3b7ff; font-size: 8px; letter-spacing: .5px; background: #293b60; border-radius: 5px; padding: 4px 5px; }
 .nav-spacer { margin-top: 30px; }
-.sidebar-bottom { margin-top: auto; padding-top: 20px; flex-shrink: 0; }
+.sidebar-bottom { margin-top: auto; padding-top: 24px; padding-bottom: 24px; flex-shrink: 0; }
 .demo-sidebar { margin: 0 2px 15px; border: 1px solid rgba(255,255,255,.085); background: rgba(255,255,255,.035); border-radius: 11px; padding: 12px; display: flex; align-items: flex-start; gap: 10px; }
 .demo-dot { width: 7px; height: 7px; display: inline-block; flex: 0 0 7px; border-radius: 50%; background: #50c99d; box-shadow: 0 0 0 3px rgba(80,201,157,.12); }
 .demo-sidebar .demo-dot { margin: 4px 0 0 1px; }
