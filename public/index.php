@@ -60,7 +60,9 @@ if (str_starts_with($requestPath, '/api/')) {
         (new ApiController())->dispatch($requestPath, Http::method());
     } catch (Throwable $exception) {
         error_log('FinSync request failed: ' . $exception->getMessage());
-        Http::error('The request could not be completed. Confirm the local database setup and try again.', 'server_error', 500);
+        $errorMsg = $exception->getMessage();
+        // Provide transparent database feedback so hosting issues can be fixed immediately
+        Http::error($errorMsg, 'server_error', 500);
     }
 }
 

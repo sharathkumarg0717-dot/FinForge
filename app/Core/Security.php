@@ -35,6 +35,15 @@ final class Security
     public static function requireCsrf(): void
     {
         $sent = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+        if ($sent === '' && function_exists('getallheaders')) {
+            $headers = getallheaders();
+            foreach ($headers as $key => $val) {
+                if (strcasecmp($key, 'X-CSRF-Token') === 0) {
+                    $sent = (string)$val;
+                    break;
+                }
+            }
+        }
         $known = self::csrfToken();
         if ($sent === '' || $known === '' || !hash_equals($known, $sent)) {
             Http::error('This request could not be verified. Refresh the page and try again.', 'csrf_failed', 419);

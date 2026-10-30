@@ -5,6 +5,9 @@ declare(strict_types=1);
 header('Content-Type: text/html; charset=utf-8');
 
 $configFile = dirname(__DIR__) . '/config.local.php';
+if (!is_file($configFile) && is_file(__DIR__ . '/config.local.php')) {
+    $configFile = __DIR__ . '/config.local.php';
+}
 $hasConfig = is_file($configFile);
 $config = $hasConfig ? (array)require $configFile : [];
 $db = $config['db'] ?? [];
@@ -140,3 +143,4 @@ if ($hasConfig) {
     </div>
 </body>
 </html>
+

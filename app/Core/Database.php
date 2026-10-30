@@ -18,6 +18,9 @@ final class Database
         }
 
         $configFile = dirname(__DIR__, 2) . '/config.local.php';
+        if (!is_file($configFile) && is_file(dirname(__DIR__, 2) . '/public/config.local.php')) {
+            $configFile = dirname(__DIR__, 2) . '/public/config.local.php';
+        }
         $settings = is_file($configFile) ? (array)require $configFile : [];
         $db = $settings['db'] ?? [];
         $host = getenv('DB_HOST') ?: (string)($db['host'] ?? '127.0.0.1');
@@ -46,6 +49,9 @@ final class Database
     public static function config(): array
     {
         $file = dirname(__DIR__, 2) . '/config.local.php';
+        if (!is_file($file) && is_file(dirname(__DIR__, 2) . '/public/config.local.php')) {
+            $file = dirname(__DIR__, 2) . '/public/config.local.php';
+        }
         $settings = is_file($file) ? (array)require $file : [];
         if (getenv('GOOGLE_CLIENT_ID')) {
             $settings['google']['client_id'] = (string)getenv('GOOGLE_CLIENT_ID');

@@ -13,3 +13,4 @@ if (is_file($publicIndex)) {
     http_response_code(500);
     echo "FinSync: Could not locate public/index.php.";
 }
+

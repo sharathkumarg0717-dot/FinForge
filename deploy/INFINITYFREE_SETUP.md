@@ -102,3 +102,4 @@ To make Google show the **native mobile account picker popup** (with the user's 
 6. Paste it into your `config.local.php` under `'client_id' => '...'`.
 
 Now, whenever anyone opens your website on their mobile phone, Google will automatically display the native **"Continue to FinSync as [User Name]"** Google prompt!
+
