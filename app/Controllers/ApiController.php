@@ -212,15 +212,33 @@ final class ApiController
         if ($path === '/api/zerodha/sync-kite' && $method === 'POST') {
             $body = Http::body();
             $apiKey = trim((string)($body['api_key'] ?? ''));
+            $apiSecret = trim((string)($body['api_secret'] ?? ''));
+            $requestToken = trim((string)($body['request_token'] ?? $body['redirect_url'] ?? ''));
             $accessToken = trim((string)($body['access_token'] ?? ''));
             $accountId = (int)($body['account_id'] ?? 0);
-            if ($apiKey === '' || $accessToken === '') {
-                Http::error('Enter both Zerodha Kite API Key and Access Token.');
+
+            if ($apiKey === '') {
+                Http::error('Enter your Zerodha Kite API Key.');
             }
+
             if ($accountId <= 0) {
                 $zerodha = $this->finance->zerodhaAccount($userId);
                 $accountId = $zerodha ? (int)$zerodha['account']['id'] : $this->finance->connectZerodhaDemat($userId, 'Kite User');
             }
+
+            // If access_token was not provided directly, auto-exchange using api_secret + request_token
+            if ($accessToken === '') {
+                if ($apiSecret === '' || $requestToken === '') {
+                    Http::error('Please enter your Kite API Secret and complete Step 1 to generate the request token.');
+                }
+                $tokenData = $this->finance->exchangeKiteToken($apiKey, $apiSecret, $requestToken);
+                $accessToken = (string)($tokenData['access_token'] ?? '');
+                $kiteClientId = (string)($tokenData['user_id'] ?? '');
+                if ($kiteClientId !== '') {
+                    $this->finance->updateZerodhaClientId($userId, $accountId, $kiteClientId);
+                }
+            }
+
             try {
                 $res = $this->finance->syncZerodhaKiteApi($userId, $accountId, $apiKey, $accessToken);
                 $this->audit($userId, 'zerodha.kite_synced', 'financial_account', $accountId);

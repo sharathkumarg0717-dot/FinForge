@@ -601,6 +601,64 @@ final class FinanceRepository
         return $holdings;
     }
 
+    public function exchangeKiteToken(string $apiKey, string $apiSecret, string $requestToken): array
+    {
+        // Extract request_token if user pasted the full redirect URL
+        if (str_contains($requestToken, 'request_token=')) {
+            $parts = parse_url($requestToken);
+            if (!empty($parts['query'])) {
+                parse_str($parts['query'], $query);
+                if (!empty($query['request_token'])) {
+                    $requestToken = (string)$query['request_token'];
+                }
+            }
+        } elseif (preg_match('/request_token=([a-zA-Z0-9_\-]+)/', $requestToken, $matches)) {
+            $requestToken = $matches[1];
+        }
+        $requestToken = trim($requestToken);
+        if ($requestToken === '') {
+            throw new \RuntimeException('Invalid or empty request token. Please complete the Zerodha login step.');
+        }
+
+        $checksum = hash('sha256', trim($apiKey) . $requestToken . trim($apiSecret));
+
+        $ch = curl_init('https://api.kite.trade/session/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'api_key' => trim($apiKey),
+            'request_token' => $requestToken,
+            'checksum' => $checksum,
+        ]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'X-Kite-Version: 3',
+            'Content-Type: application/x-www-form-urlencoded',
+        ]);
+        $res = curl_exec($ch);
+        $err = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($err) {
+            throw new \RuntimeException('Failed to connect to Zerodha token service: ' . $err);
+        }
+
+        $json = json_decode((string)$res, true);
+        if ($status !== 200 || !is_array($json) || ($json['status'] ?? '') !== 'success') {
+            $msg = $json['message'] ?? 'Token exchange failed (HTTP ' . $status . ')';
+            throw new \RuntimeException('Zerodha authentication error: ' . $msg);
+        }
+
+        return $json['data'] ?? [];
+    }
+
+    public function updateZerodhaClientId(int $userId, int $accountId, string $clientId): void
+    {
+        $stmt = $this->db->prepare('UPDATE financial_accounts SET client_id = :client_id WHERE id = :id AND user_id = :user_id');
+        $stmt->execute(['client_id' => $clientId, 'id' => $accountId, 'user_id' => $userId]);
+    }
+
     public function syncZerodhaKiteApi(int $userId, int $accountId, string $apiKey, string $accessToken): array
     {
         $ch = curl_init('https://api.kite.trade/portfolio/holdings');

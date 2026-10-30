@@ -60,6 +60,7 @@ if (str_starts_with($requestPath, '/api/')) {
         (new ApiController())->dispatch($requestPath, Http::method());
     } catch (Throwable $exception) {
         error_log('FinSync request failed: ' . $exception->getMessage());
+        Http::error('The request could not be completed. Confirm the local database setup and try again.', 'server_error', 500);
         $errorMsg = $exception->getMessage();
         // Provide transparent database feedback so hosting issues can be fixed immediately
         Http::error($errorMsg, 'server_error', 500);
@@ -982,22 +983,55 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
       <!-- TAB 3: KITE CONNECT API -->
       <div id="tab-api" class="zerodha-tab-content" hidden>
         <form id="zerodha-api-form">
-          <p class="modal-sub">Direct sync via official <b>Zerodha Kite Connect API</b> (<a href="https://kite.trade" target="_blank" rel="noreferrer" style="color:#ff5722;">kite.trade</a>).</p>
-          <label>Kite API Key
-            <input type="text" name="api_key" placeholder="e.g. abcdef1234567890" required>
+          <p class="modal-sub">Direct sync via your personal <b>Zerodha Kite Connect Developer Credentials</b>.</p>
+          
+          <div class="form-row-2">
+            <label>Kite API Key
+              <input type="text" name="api_key" id="kite-api-key" placeholder="e.g. abcdef1234567890" required>
+            </label>
+            <label>Kite API Secret
+              <input type="password" name="api_secret" id="kite-api-secret" placeholder="Your 32-character API secret">
+            </label>
+          </div>
+
+          <!-- Step 1: Open Kite Login -->
+          <div class="kite-step-box" style="margin: 12px 0; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+              <div>
+                <b style="font-size: 13px; color: #0f172a;"><i class="fa-solid fa-arrow-up-right-from-square" style="color:#ff5722;"></i> Step 1: Log in with Zerodha</b>
+                <p style="margin: 3px 0 0; font-size: 11px; color: #64748b;">Opens Zerodha in a new tab to authorize today's session.</p>
+              </div>
+              <button type="button" id="kite-open-login-btn" class="outline-button small-button" style="white-space:nowrap;">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Kite Login
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 2: Request Token or Redirect URL -->
+          <label id="kite-token-field">Step 2: Redirected URL or Request Token
+            <input type="text" name="request_token" id="kite-request-token" placeholder="Paste the redirected URL from your browser address bar (e.g. https://.../?request_token=XXXXX)">
+            <small style="color: #64748b; font-size: 11px;">After logging in, copy the URL from your browser address bar and paste it here.</small>
           </label>
-          <label>Kite Access Token
-            <input type="password" name="access_token" placeholder="Generated daily access token" required>
+
+          <div style="text-align: right; margin: 6px 0 10px;">
+            <button type="button" id="kite-toggle-manual-token" class="text-button" style="font-size: 11px; color: #64748b; text-decoration: underline; background: none; border: none; cursor: pointer;">
+              Or I already have a daily Access Token
+            </button>
+          </div>
+
+          <label id="kite-manual-access-token-field" hidden>Direct Kite Access Token
+            <input type="password" name="access_token" id="kite-access-token" placeholder="Paste daily access token directly">
           </label>
+
           <div class="auth-safety" style="margin-top:10px;">
             <i class="fa-solid fa-shield-halved"></i>
-            <span>Your token is used directly with <code>api.kite.trade/portfolio/holdings</code> to pull your real portfolio into local MySQL.</span>
+            <span>FinSync calculates the SHA-256 checksum and exchanges your token with <code>api.kite.trade</code> securely.</span>
           </div>
 
           <p id="zerodha-api-error" class="form-message error-text" role="status" aria-live="polite"></p>
           <footer>
             <button type="submit" id="zerodha-api-submit" class="primary-button full-button zerodha-btn">
-              <i class="fa-solid fa-rotate"></i> Sync Live Holdings from Kite API
+              <i class="fa-solid fa-bolt"></i> Generate Token &amp; Sync Holdings
             </button>
           </footer>
         </form>

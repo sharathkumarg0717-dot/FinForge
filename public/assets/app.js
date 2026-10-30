@@ -1564,18 +1564,53 @@
     }
   });
 
+  // Kite Login Button in Tab 3
+  $('#kite-open-login-btn')?.addEventListener('click', () => {
+    const apiKey = ($('#kite-api-key')?.value || '').trim();
+    const errEl = $('#zerodha-api-error');
+    if (!apiKey) {
+      if (errEl) errEl.textContent = 'Please enter your Kite API Key first.';
+      $('#kite-api-key')?.focus();
+      return;
+    }
+    if (errEl) errEl.textContent = '';
+    const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${encodeURIComponent(apiKey)}`;
+    window.open(loginUrl, '_blank');
+  });
+
+  // Toggle manual access token field
+  $('#kite-toggle-manual-token')?.addEventListener('click', () => {
+    const field = $('#kite-manual-access-token-field');
+    if (field) {
+      field.hidden = !field.hidden;
+      if (!field.hidden) {
+        $('#kite-access-token')?.focus();
+      }
+    }
+  });
+
   // Kite API form submit
   $('#zerodha-api-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     const apiKey = (form.api_key?.value || '').trim();
+    const apiSecret = (form.api_secret?.value || '').trim();
+    const requestToken = (form.request_token?.value || '').trim();
     const accessToken = (form.access_token?.value || '').trim();
     const errEl = $('#zerodha-api-error');
     if (errEl) errEl.textContent = '';
     const submitBtn = $('#zerodha-api-submit');
     if (submitBtn) submitBtn.disabled = true;
     try {
-      const res = await api('/api/zerodha/sync-kite', { method: 'POST', body: { api_key: apiKey, access_token: accessToken } });
+      const res = await api('/api/zerodha/sync-kite', {
+        method: 'POST',
+        body: {
+          api_key: apiKey,
+          api_secret: apiSecret,
+          request_token: requestToken,
+          access_token: accessToken,
+        }
+      });
       $('#zerodha-modal')?.close();
       toast(`Synced ${res.imported_count} live holdings from Zerodha Kite!`);
       await loadInvestments();
