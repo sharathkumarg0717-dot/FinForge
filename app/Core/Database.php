@@ -11,17 +11,43 @@ final class Database
 {
     private static ?PDO $connection = null;
 
+    public static function locateConfigFile(): ?string
+    {
+        $docRoot = !empty($_SERVER['DOCUMENT_ROOT']) ? rtrim(str_replace('\\', '/', (string)$_SERVER['DOCUMENT_ROOT']), '/') : '';
+        $scriptDir = !empty($_SERVER['SCRIPT_FILENAME']) ? rtrim(str_replace('\\', '/', dirname((string)$_SERVER['SCRIPT_FILENAME'])), '/') : '';
+        $candidates = [
+            dirname(__DIR__, 2) . '/config.local.php',
+            dirname(__DIR__, 2) . '/public/config.local.php',
+            dirname(__DIR__, 3) . '/config.local.php',
+            dirname(__DIR__, 3) . '/htdocs/config.local.php',
+            dirname(__DIR__, 3) . '/htdocs/FinSync-main/config.local.php',
+            $scriptDir . '/config.local.php',
+            $scriptDir . '/../config.local.php',
+        ];
+        if ($docRoot !== '') {
+            $candidates[] = $docRoot . '/config.local.php';
+            $candidates[] = $docRoot . '/FinSync-main/config.local.php';
+            $candidates[] = $docRoot . '/FinSync-main/public/config.local.php';
+        }
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
     public static function connection(): PDO
     {
         if (self::$connection instanceof PDO) {
             return self::$connection;
         }
 
-        $configFile = dirname(__DIR__, 2) . '/config.local.php';
-        if (!is_file($configFile) && is_file(dirname(__DIR__, 2) . '/public/config.local.php')) {
-            $configFile = dirname(__DIR__, 2) . '/public/config.local.php';
+        $configFile = self::locateConfigFile();
+        if ($configFile === null && getenv('DB_HOST') === false) {
+            throw new RuntimeException("Database configuration file (config.local.php) is missing! Create 'config.local.php' in your FinSync-main folder with your InfinityFree MySQL credentials.");
         }
-        $settings = is_file($configFile) ? (array)require $configFile : [];
+        $settings = $configFile !== null ? (array)require $configFile : [];
         $db = $settings['db'] ?? [];
         $host = getenv('DB_HOST') ?: (string)($db['host'] ?? '127.0.0.1');
         $port = (int)(getenv('DB_PORT') ?: ($db['port'] ?? 3306));
@@ -48,11 +74,8 @@ final class Database
 
     public static function config(): array
     {
-        $file = dirname(__DIR__, 2) . '/config.local.php';
-        if (!is_file($file) && is_file(dirname(__DIR__, 2) . '/public/config.local.php')) {
-            $file = dirname(__DIR__, 2) . '/public/config.local.php';
-        }
-        $settings = is_file($file) ? (array)require $file : [];
+        $file = self::locateConfigFile();
+        $settings = $file !== null ? (array)require $file : [];
         if (getenv('GOOGLE_CLIENT_ID')) {
             $settings['google']['client_id'] = (string)getenv('GOOGLE_CLIENT_ID');
         }

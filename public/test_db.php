@@ -4,11 +4,10 @@ declare(strict_types=1);
 // FinSync Database Diagnostic Tool for InfinityFree & Hosting Providers
 header('Content-Type: text/html; charset=utf-8');
 
-$configFile = dirname(__DIR__) . '/config.local.php';
-if (!is_file($configFile) && is_file(__DIR__ . '/config.local.php')) {
-    $configFile = __DIR__ . '/config.local.php';
-}
-$hasConfig = is_file($configFile);
+require_once dirname(__DIR__) . '/app/Core/Database.php';
+
+$configFile = \FinSync\Core\Database::locateConfigFile();
+$hasConfig = ($configFile !== null);
 $config = $hasConfig ? (array)require $configFile : [];
 $db = $config['db'] ?? [];
 

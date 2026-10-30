@@ -21,29 +21,28 @@ final class ApiController
 
     public function __construct()
     {
-        $this->db = Database::connection();
-        $this->consent = new ConsentService($this->db);
-        $this->finance = new FinanceRepository($this->db);
     }
 
     public function dispatch(string $path, string $method): void
     {
-        if ($path === '/api/health' && $method === 'GET') {
-            $this->db->query('SELECT 1');
-            Http::json(['data' => ['status' => 'ok', 'mode' => 'local-demo']]);
-        }
         if ($path === '/api/session' && $method === 'GET') {
             $id = Security::currentUserId();
             $user = null;
             $granted = false;
             if ($id !== null) {
-                $statement = $this->db->prepare('SELECT id, name, email, avatar_url, auth_provider FROM users WHERE id = :id AND status = "active" LIMIT 1');
-                $statement->execute(['id' => $id]);
-                $user = $statement->fetch() ?: null;
-                if ($user === null) {
+                try {
+                    $db = Database::connection();
+                    $statement = $db->prepare('SELECT id, name, email, avatar_url, auth_provider FROM users WHERE id = :id AND status = "active" LIMIT 1');
+                    $statement->execute(['id' => $id]);
+                    $user = $statement->fetch() ?: null;
+                    if ($user === null) {
+                        unset($_SESSION['user_id']);
+                    } else {
+                        $granted = (new ConsentService($db))->granted($id);
+                    }
+                } catch (Throwable $e) {
+                    error_log('Session user lookup notice: ' . $e->getMessage());
                     unset($_SESSION['user_id']);
-                } else {
-                    $granted = $this->consent->granted($id);
                 }
             }
             Http::json(['data' => [
@@ -58,6 +57,15 @@ final class ApiController
                 'consent_granted' => $granted,
                 'csrf_token' => Security::csrfToken(),
             ]]);
+        }
+
+        $this->db = Database::connection();
+        $this->consent = new ConsentService($this->db);
+        $this->finance = new FinanceRepository($this->db);
+
+        if ($path === '/api/health' && $method === 'GET') {
+            $this->db->query('SELECT 1');
+            Http::json(['data' => ['status' => 'ok', 'mode' => 'local-demo']]);
         }
 
         $auth = new AuthController();
