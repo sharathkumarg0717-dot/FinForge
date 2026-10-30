@@ -63,18 +63,28 @@ mysql -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';"
 mysql -e "FLUSH PRIVILEGES;"
 
 # Deploy application code
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="/var/www/finsync"
 echo "5. Deploying FinSync codebase to ${APP_DIR}..."
 
-if [ -d "${APP_DIR}/.git" ]; then
+mkdir -p "${APP_DIR}"
+
+if [ "${SCRIPT_DIR}" != "${APP_DIR}" ] && [ -f "${SCRIPT_DIR}/public/index.php" ]; then
+  echo "Deploying files from current workspace (${SCRIPT_DIR}) into ${APP_DIR}..."
+  cp -a "${SCRIPT_DIR}/." "${APP_DIR}/"
+elif [ -d "${APP_DIR}/.git" ]; then
   echo "Pulling latest changes from Git..."
   cd "${APP_DIR}"
-  git pull origin main
+  git pull origin main || true
+elif [ -f "${APP_DIR}/public/index.php" ]; then
+  echo "Application files verified in ${APP_DIR}."
 else
   echo "Cloning repository from GitHub..."
-  git clone https://github.com/sharathkumarg0717-dot/FinSync.git "${APP_DIR}"
-  cd "${APP_DIR}"
+  git clone https://github.com/sharathkumarg0717-dot/FinSync.git "${APP_DIR}" || {
+    echo "[!] If your GitHub repo is private, please ensure you are authenticated or copy the folder with scp."
+  }
 fi
+cd "${APP_DIR}"
 
 # Import schema into MySQL
 echo "6. Initializing database schema..."
@@ -160,3 +170,4 @@ echo "IMPORTANT ORACLE CLOUD STEP:"
 echo "Remember to allow Port 80 and 443 Ingress in your"
 echo "Oracle Cloud Console -> Virtual Cloud Network -> Security List!"
 echo "========================================================"
+
