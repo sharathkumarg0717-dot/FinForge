@@ -37,7 +37,7 @@ final class Database
             ]);
         } catch (Throwable $exception) {
             error_log('FinSync database connection failed: ' . $exception->getMessage());
-            throw new RuntimeException('Unable to connect to the database. Check database configuration and confirm MySQL is running.');
+            throw new RuntimeException("Database connection failed to {$host} as user '{$user}': " . $exception->getMessage());
         }
 
         return self::$connection;

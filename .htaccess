@@ -1,0 +1,16 @@
+# FinSync Root .htaccess for Shared Hosts (InfinityFree / cPanel)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Prevent direct access to sensitive folders
+    RewriteRule ^app/ - [F,L]
+    RewriteRule ^database/ - [F,L]
+    RewriteRule ^config\.local\.php$ - [F,L]
+
+    # Allow direct access to test_db.php for diagnostics
+    RewriteRule ^test_db\.php$ public/test_db.php [L]
+
+    # Route all other requests to public/
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>

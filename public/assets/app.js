@@ -1038,6 +1038,8 @@
           const customBtn = $('#google-signin-custom');
           if (customBtn) customBtn.style.display = 'none';
         }
+        // Trigger native mobile Google One Tap bottom sheet
+        google.accounts.id.prompt();
       } catch (e) {
         console.warn('Google Identity Services notice:', e);
       }
