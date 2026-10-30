@@ -1022,6 +1022,8 @@
         google.accounts.id.initialize({
           client_id: clientId,
           callback: (response) => handleGoogleLogin({ credential: response.credential }),
+          auto_select: false,
+          cancel_on_tap_outside: true,
         });
         const btnContainer = $('#google-signin-btn');
         if (btnContainer) {
@@ -1033,6 +1035,8 @@
             text: 'continue_with',
             shape: 'rectangular',
           });
+          const customBtn = $('#google-signin-custom');
+          if (customBtn) customBtn.style.display = 'none';
         }
       } catch (e) {
         console.warn('Google Identity Services notice:', e);
@@ -1384,6 +1388,14 @@
     }
     const modal = $('#google-modal');
     if (modal && typeof modal.showModal === 'function') {
+      const gForm = $('#google-modal-form');
+      const authForm = $('#auth-form');
+      if (gForm && authForm) {
+        const typedEmail = (authForm.elements.email?.value || '').trim();
+        const typedName = (authForm.elements.name?.value || '').trim();
+        if (typedEmail) gForm.elements.google_email.value = typedEmail;
+        if (typedName) gForm.elements.google_name.value = typedName;
+      }
       modal.showModal();
     }
   });

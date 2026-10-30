@@ -50,3 +50,4 @@ volumes:
 networks:
   finsync_net:
     driver: bridge
+

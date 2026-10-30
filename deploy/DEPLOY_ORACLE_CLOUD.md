@@ -107,3 +107,4 @@ If you have a domain name pointing to your Oracle IP, run:
 sudo certbot --apache -d yourdomain.com
 ```
 Certbot will issue and automatically renew a free Let's Encrypt SSL certificate!
+

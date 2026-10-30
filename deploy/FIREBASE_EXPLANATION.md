@@ -16,3 +16,4 @@
 - **Firebase Hosting** was designed for Single Page Applications (React, Vue, static HTML/JS) and serverless Node.js Cloud Functions. It **cannot run PHP scripts directly** and does not provide a free MySQL database.
 - If you want to use Google Cloud / Firebase infrastructure for FinSync, you can deploy FinSync's container (`Dockerfile`) to **Google Cloud Run** and connect it to **Google Cloud SQL (MySQL)**. However, Cloud SQL incurs recurring monthly costs (~$10–$30/month) outside Google's free tier.
 - **Oracle Cloud Infrastructure (OCI)** provides a **permanent 100% Always Free Tier** VM with native PHP 8.2 and native MySQL with zero cost, making it the ideal choice for FinSync.
+
