@@ -84,7 +84,7 @@ If you prefer Docker on Oracle Cloud:
    ```
 3. Clone your FinSync repository:
    ```bash
-   git clone https://github.com/sharathkumarg0717-dot/FinSync.git
+   git clone https://github.com/sharathkumarg0717-dot/FinForge.git
    cd FinSync
    ```
 4. Start FinSync with Docker Compose:

@@ -80,7 +80,7 @@ elif [ -f "${APP_DIR}/public/index.php" ]; then
   echo "Application files verified in ${APP_DIR}."
 else
   echo "Cloning repository from GitHub..."
-  git clone https://github.com/sharathkumarg0717-dot/FinSync.git "${APP_DIR}" || {
+  git clone https://github.com/sharathkumarg0717-dot/FinForge.git "${APP_DIR}" || {
     echo "[!] If your GitHub repo is private, please ensure you are authenticated or copy the folder with scp."
   }
 fi

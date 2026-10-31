@@ -1,6 +1,6 @@
-# FinSync
+# FinForge — Financial Intelligence Platform
 
-FinSync is a local family-finance dashboard demo built with native PHP 8+, MySQL/PDO, semantic HTML, CSS, vanilla JavaScript, and Chart.js. It runs with XAMPP and does not require Azure, cloud provisioning, Composer, a framework, or a live financial provider.
+FinForge is a modern financial intelligence and family-finance platform built with native PHP 8+, MySQL/PDO, semantic HTML, CSS, vanilla JavaScript, and Chart.js. It features native Zerodha Demat equity sync, cash-flow runway forecasting, and proactive household budgeting. It runs locally with XAMPP or Docker, and on cloud/shared hosting (InfinityFree, Oracle Cloud).
 
 > **Synthetic demo only:** Never enter bank credentials. Provider adapters use fixtures only. Payment receipts are simulations and cannot move real money. Advisor responses are informational summaries, not professional financial advice.
 
