@@ -32,15 +32,24 @@
       credentials: 'same-origin',
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
-    const result = await response.json().catch(() => ({}));
-    if (result.data?.csrf_token) state.csrf = result.data.csrf_token;
+    const text = await response.text();
+    let result = {};
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch (e) {
+      if (!response.ok) {
+        throw new Error(`Server returned error (${response.status})`);
+      }
+      throw new Error('Unexpected server response. Please refresh and try again.');
+    }
+    if (result && result.data?.csrf_token) state.csrf = result.data.csrf_token;
     if (!response.ok) {
       const error = new Error(result.error?.message || `Request failed (${response.status}).`);
       error.code = result.error?.code || 'request_failed';
       error.status = response.status;
       throw error;
     }
-    return result.data;
+    return result.data !== undefined ? result.data : result;
   }
 
   function toast(message, error = false) {
@@ -161,8 +170,13 @@
   async function initializeSession() {
     try {
       const result = await api('/api/session');
+      if (!result) {
+        showAuth();
+        initGoogleAuth();
+        return;
+      }
       state.csrf = result.csrf_token || '';
-      state.user = result.user;
+      state.user = result.user || null;
       state.consent = Boolean(result.consent_granted);
       if (!result.authenticated || !result.user) {
         showAuth();
@@ -175,7 +189,7 @@
       goTo('personal-finance');
     } catch (error) {
       showAuth();
-      $('#auth-message').textContent = error.message || 'Could not reach the local FinForge service.';
+      $('#auth-message').textContent = error.message || 'Could not reach the local FinSync service.';
     }
   }
 
@@ -1283,10 +1297,17 @@
   }
 
   async function completeAuth(result, toastMessage = 'Welcome back.') {
+    if (!result || !result.user) {
+      throw new Error('Sign in succeeded, but user data was missing. Please refresh and try again.');
+    }
     state.user = result.user;
-    state.csrf = result.csrf_token;
-    const consent = await api('/api/consent');
-    state.consent = Boolean(consent.financial_data.granted);
+    state.csrf = result.csrf_token || state.csrf;
+    try {
+      const consent = await api('/api/consent');
+      state.consent = Boolean(consent?.financial_data?.granted);
+    } catch (e) {
+      state.consent = false;
+    }
     clearPersonalFinanceView();
     showApp();
     showUser(result.user);

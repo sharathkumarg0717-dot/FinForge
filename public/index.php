@@ -79,6 +79,7 @@ if ($requestPath === '/api/config/auth' && Http::method() === 'GET') {
 if (str_starts_with($requestPath, '/api/')) {
     try {
         (new ApiController())->dispatch($requestPath, Http::method());
+        Http::error("API endpoint not found: {$requestPath}", 'not_found', 404);
     } catch (Throwable $exception) {
         error_log('FinSync request failed: ' . $exception->getMessage());
         Http::error($exception->getMessage(), 'server_error', 500);
