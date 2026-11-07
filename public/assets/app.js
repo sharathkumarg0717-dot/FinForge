@@ -35,12 +35,19 @@
     const text = await response.text();
     let result = {};
     try {
-      result = text ? JSON.parse(text) : {};
+      const jsonStart = text.indexOf('{');
+      const jsonEnd = text.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd >= jsonStart) {
+        result = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+      } else {
+        result = text ? JSON.parse(text) : {};
+      }
     } catch (e) {
+      console.error('API response parse failed. Raw text:', text);
       if (!response.ok) {
         throw new Error(`Server returned error (${response.status})`);
       }
-      throw new Error('Unexpected server response. Please refresh and try again.');
+      throw new Error(`Unexpected server response (${response.status}). Please try again.`);
     }
     if (result && result.data?.csrf_token) state.csrf = result.data.csrf_token;
     if (!response.ok) {
