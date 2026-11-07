@@ -18,6 +18,12 @@ require_once dirname(__DIR__) . '/app/Services/ConsentService.php';
 require_once dirname(__DIR__) . '/app/Services/MockProviderService.php';
 require_once dirname(__DIR__) . '/app/Services/DemoDataService.php';
 require_once dirname(__DIR__) . '/app/Services/AdvisorService.php';
+require_once dirname(__DIR__) . '/app/Services/ExpenseService.php';
+require_once dirname(__DIR__) . '/app/Services/BrokerInterface.php';
+require_once dirname(__DIR__) . '/app/Services/ZerodhaBroker.php';
+require_once dirname(__DIR__) . '/app/Services/DhanBroker.php';
+require_once dirname(__DIR__) . '/app/Services/GrowwBroker.php';
+require_once dirname(__DIR__) . '/app/Services/BrokerService.php';
 require_once dirname(__DIR__) . '/app/Controllers/AuthController.php';
 require_once dirname(__DIR__) . '/app/Controllers/ApiController.php';
 
@@ -35,8 +41,15 @@ $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
 if ($basePath === '' && isset($_SERVER['SCRIPT_NAME'])) {
     $scriptDir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
-    if ($scriptDir !== '' && $scriptDir !== '/' && str_starts_with($requestPath, $scriptDir)) {
-        $basePath = $scriptDir;
+    if ($scriptDir !== '' && $scriptDir !== '/') {
+        if (str_starts_with($requestPath, $scriptDir)) {
+            $basePath = $scriptDir;
+        } elseif (str_ends_with($scriptDir, '/public')) {
+            $parentDir = substr($scriptDir, 0, -7);
+            if ($parentDir !== '' && ($requestPath === $parentDir || str_starts_with($requestPath, $parentDir . '/'))) {
+                $basePath = $parentDir;
+            }
+        }
     }
 }
 
@@ -47,6 +60,14 @@ $requestPath = preg_replace('#/index\.php(?=/|$)#', '', $requestPath) ?: '/';
 $requestPath = '/' . trim($requestPath, '/');
 if ($requestPath === '//') {
     $requestPath = '/';
+}
+
+// Automatically ensure local database schema is up-to-date
+try {
+    $dbInit = Database::connection();
+    FinanceRepository::ensureSchema($dbInit);
+} catch (Throwable $e) {
+    error_log('Initial schema check notice: ' . $e->getMessage());
 }
 
 if ($requestPath === '/api/config/auth' && Http::method() === 'GET') {
@@ -60,10 +81,7 @@ if (str_starts_with($requestPath, '/api/')) {
         (new ApiController())->dispatch($requestPath, Http::method());
     } catch (Throwable $exception) {
         error_log('FinSync request failed: ' . $exception->getMessage());
-        Http::error('The request could not be completed. Confirm the local database setup and try again.', 'server_error', 500);
-        $errorMsg = $exception->getMessage();
-        // Provide transparent database feedback so hosting issues can be fixed immediately
-        Http::error($errorMsg, 'server_error', 500);
+        Http::error($exception->getMessage(), 'server_error', 500);
     }
 }
 
@@ -79,7 +97,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101b33">
-  <title>FinForge — Family finances, in focus</title>
+  <title>FinSync — Multi-Broker, Secure Banking &amp; Expense Management</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
   <link rel="preconnect" href="https://accounts.google.com">
@@ -89,25 +107,26 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <script nonce="<?= Security::escape($nonce) ?>">
     window.FINSYNC_BASE = <?= json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     window.FINSYNC_GOOGLE_CLIENT_ID = <?= json_encode($googleClientId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    window.FINSYNC_CSRF = <?= json_encode(Security::csrfToken(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   </script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer nonce="<?= Security::escape($nonce) ?>"></script>
 </head>
 <body>
-  <div id="auth-view" class="auth-shell" hidden>
+  <div id="auth-view" class="auth-shell">
     <section class="auth-brand" aria-label="FinForge introduction">
-      <a class="brand brand-light" href="#" aria-label="FinForge home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Forge</span></span></a>
+      <a class="brand brand-light" href="#" aria-label="FinForge home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
       <div class="auth-intro">
-        <p class="eyebrow">A clearer view, together</p>
-        <h1>Family finances,<br><em>in focus.</em></h1>
-        <p>One calm place to understand your household’s demo accounts, cash flow, and upcoming plans.</p>
-        <div class="auth-points"><span><i class="fa-solid fa-shield-halved"></i> Private local demo</span><span><i class="fa-solid fa-flask"></i> Synthetic data only</span></div>
+        <p class="eyebrow">A CLEARER VIEW OF YOUR WEALTH</p>
+        <h1>Smart finances,<br><em>in focus.</em></h1>
+        <p>One unified, secure platform to track multi-broker investments, expenses, and banking cash flows.</p>
+        <div class="auth-points"><span><i class="fa-solid fa-shield-halved"></i> AES-256 Encrypted</span><span><i class="fa-solid fa-chart-line"></i> Multi-Broker Sync</span></div>
       </div>
-      <small>FinForge is an informational demo. No real accounts or payments are connected.</small>
+      <small>FinSync FinTech Platform · Bank-grade security &amp; private data protection.</small>
     </section>
     <section class="auth-form-wrap">
       <div class="auth-card">
-        <div class="mobile-brand"><a class="brand" href="#"><span class="brand-mark"><i class="fa-solid fa-layer-group"></i></span><span>Fin<span>Forge</span></span></a></div>
-        <div class="auth-heading"><p class="eyebrow">Welcome to FinForge</p><h2 id="auth-title">Sign in to your space</h2><p id="auth-subtitle">A household overview, designed around clarity.</p></div>
+        <div class="mobile-brand"><a class="brand" href="#"><span class="brand-mark"><i class="fa-solid fa-layer-group"></i></span><span>Fin<span>Sync</span></span></a></div>
+        <div class="auth-heading"><p class="eyebrow">Welcome to FinSync</p><h2 id="auth-title">Sign in to your space</h2><p id="auth-subtitle">Real-time wealth tracking and expense management.</p></div>
         <div class="auth-switch" role="tablist" aria-label="Choose sign in or register">
           <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">Sign in</button>
           <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">Create account</button>
@@ -115,8 +134,11 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <form id="auth-form" novalidate>
           <label id="name-field" hidden>Your name<input name="name" autocomplete="name" maxlength="120" placeholder="e.g. Alex Morgan"></label>
           <label>Email address<input name="email" type="email" autocomplete="email" maxlength="190" required placeholder="you@example.com"></label>
-          <label>Password<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="200" required placeholder="At least 10 characters"></label>
-          <label id="consent-field" class="check-line" hidden><input name="consent_demo" type="checkbox"><span>I agree to use only FinForge’s synthetic demo family-finance records. I understand this does not connect real accounts.</span></label>
+          <label id="password-field">Password<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="200" required placeholder="At least 10 characters"></label>
+          <div id="forgot-password-row" style="text-align: right; margin: -8px 0 12px;">
+            <a href="#" id="forgot-password-link" style="font-size: 12px; color: #4338ca; text-decoration: none;">Forgot password?</a>
+          </div>
+          <label id="consent-field" class="check-line" hidden><input name="consent_demo" type="checkbox"><span>I agree to FinSync's terms of service and private financial data storage.</span></label>
           <button id="auth-submit" class="primary-button full-button" type="submit"><span>Sign in</span><i class="fa-solid fa-arrow-right"></i></button>
           <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
         </form>
@@ -140,14 +162,14 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
   <div id="app-view" class="app-shell" hidden>
     <aside class="sidebar" id="sidebar">
-      <a class="brand sidebar-brand" href="#" data-nav="personal-finance" aria-label="FinForge personal finance dashboard"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Forge</span></span></a>
+      <a class="brand sidebar-brand" href="#" data-nav="personal-finance" aria-label="FinForge personal finance dashboard"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
       <div class="workspace-label">WORKSPACE</div>
       <nav class="side-nav" aria-label="Main navigation">
         <button class="nav-link active" data-nav="personal-finance"><i class="fa-solid fa-chart-pie"></i><span>My finances</span></button>
         <button class="nav-link" data-nav="overview"><i class="fa-solid fa-grid-2"></i><span>Demo overview</span></button>
         <button class="nav-link" data-nav="family"><i class="fa-solid fa-people-roof"></i><span>Family</span><span class="nav-count" id="family-count">—</span></button>
         <button class="nav-link" data-nav="accounts"><i class="fa-solid fa-wallet"></i><span>Accounts</span></button>
-        <button class="nav-link" data-nav="transactions"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Transactions</span></button>
+        <button class="nav-link" data-nav="transactions"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Expenses &amp; Income</span></button>
         <button class="nav-link" data-nav="investments"><i class="fa-solid fa-chart-line"></i><span>Investments</span></button>
       </nav>
       <div class="workspace-label nav-spacer">PLAN &amp; PROTECT</div>
@@ -159,13 +181,13 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
       </nav>
       <div class="sidebar-bottom">
         <div class="demo-sidebar"><span class="demo-dot"></span><span><b>Private local workspace</b><small>Personal + demo data are separate</small></span></div>
-        <div class="profile-row"><span class="avatar" id="profile-avatar">F</span><span class="profile-meta"><b id="profile-name">FinForge user</b><small id="profile-email"></small></span><button id="logout-button" class="icon-button" aria-label="Sign out" title="Sign out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button></div>
+        <div class="profile-row"><span class="avatar" id="profile-avatar">F</span><span class="profile-meta"><b id="profile-name">FinSync user</b><small id="profile-email"></small></span><button id="logout-all-button" class="icon-button" aria-label="Sign out all devices" title="Sign out all devices"><i class="fa-solid fa-shield-halved"></i></button><button id="logout-button" class="icon-button" aria-label="Sign out" title="Sign out"><i class="fa-solid fa-arrow-right-from-bracket"></i></button></div>
       </div>
     </aside>
     <div class="main-column">
       <header class="topbar">
         <button id="mobile-menu" class="icon-button menu-button" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
-        <div class="breadcrumbs"><span>FinForge</span><i class="fa-solid fa-chevron-right"></i><b id="page-crumb">Overview</b></div>
+        <div class="breadcrumbs"><span>FinSync</span><i class="fa-solid fa-chevron-right"></i><b id="page-crumb">Overview</b></div>
         <div class="topbar-actions"><span class="demo-pill"><span class="demo-dot"></span> <span id="workspace-mode-label">PERSONAL DATA</span></span><button class="icon-button notification-button" data-nav="reminders" aria-label="Open reminders"><i class="fa-regular fa-bell"></i><span id="notification-dot" class="notification-dot" hidden></span></button><span class="top-date" id="today-label"></span></div>
       </header>
       <main class="content" id="main-content">
@@ -697,8 +719,140 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-transactions" hidden>
-          <div class="page-heading"><div><p class="eyebrow">HOUSEHOLD ACTIVITY</p><h1>Transactions</h1><p class="subtitle">Review and filter synthetic entries from the mock provider adapters.</p></div><label class="filter-label">Category<select id="transaction-filter"><option value="">All categories</option></select></label></div>
-          <article class="panel"><div class="panel-heading"><div><h2>Transaction history</h2><p id="transaction-count">Demo entries</p></div><span class="period-tag">SYNTHETIC</span></div><div class="table-wrap"><table><thead><tr><th>DESCRIPTION</th><th>CATEGORY</th><th>ACCOUNT</th><th>DATE</th><th class="align-right">AMOUNT</th></tr></thead><tbody id="transactions-table"></tbody></table></div><div id="transactions-empty" class="empty-state" hidden><i class="fa-solid fa-magnifying-glass"></i><p>No transactions match that category.</p></div></article>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">PERSONAL FINANCE &amp; CASH FLOW <span class="live-dot"></span> LIVE MYSQL</p>
+              <h1>Expenses &amp; Income</h1>
+              <p class="subtitle">Track manual transactions, CSV imports, category budgets, and spending trends.</p>
+            </div>
+            <div class="page-heading-actions">
+              <label class="month-filter">Month
+                <input id="expense-filter-month" type="month">
+              </label>
+              <button class="primary-button" id="open-expense-modal-btn" type="button"><i class="fa-solid fa-plus"></i> Add Transaction</button>
+              <button class="outline-button" id="open-expense-csv-btn" type="button"><i class="fa-solid fa-file-csv"></i> Import CSV</button>
+              <button class="outline-button" id="open-budget-modal-btn" type="button"><i class="fa-solid fa-bullseye"></i> Budgets</button>
+            </div>
+          </div>
+
+          <!-- Monthly Metrics Cards -->
+          <div class="stat-grid" style="margin-bottom: 20px;">
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-label">Total Monthly Income</span><span class="stat-icon green-icon"><i class="fa-solid fa-arrow-down-long"></i></span></div>
+              <div class="stat-value" id="exp-total-income">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note" id="exp-income-count">0 credits</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-label">Total Monthly Expenses</span><span class="stat-icon amber-icon"><i class="fa-solid fa-arrow-up-long"></i></span></div>
+              <div class="stat-value" id="exp-total-expenses">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note" id="exp-expense-count">0 debits</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-label">Net Savings</span><span class="stat-icon blue-icon"><i class="fa-solid fa-piggy-bank"></i></span></div>
+              <div class="stat-value" id="exp-net-savings">₹0.00</div>
+              <div class="stat-foot"><span class="tiny-note" id="exp-savings-rate">Savings rate: 0.0%</span></div>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top"><span class="stat-label">Budget Health</span><span class="stat-icon violet-icon"><i class="fa-solid fa-gauge-high"></i></span></div>
+              <div class="stat-value" id="exp-budget-status">On Track</div>
+              <div class="stat-foot"><span class="tiny-note" id="exp-budget-sub">0 active category limits</span></div>
+            </article>
+          </div>
+
+          <!-- Analytics & Budget Overview Grid -->
+          <div class="overview-grid" style="margin-bottom: 20px;">
+            <!-- Category Spending Donut Chart -->
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Category breakdown</h2>
+                  <p>Spending share across categories</p>
+                </div>
+                <span class="period-tag" id="exp-cat-chart-period">THIS MONTH</span>
+              </div>
+              <div class="category-chart-frame" style="height: 240px; display: flex; align-items: center; justify-content: center;">
+                <canvas id="expense-category-chart" style="max-height: 230px;"></canvas>
+                <div id="expense-category-empty" class="category-empty" hidden>No expenses recorded this month.</div>
+              </div>
+            </article>
+
+            <!-- Monthly Spending & Income Trend Bar Chart -->
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Cash flow trends</h2>
+                  <p>6-month income vs. expense comparison</p>
+                </div>
+                <span class="period-tag">HISTORICAL</span>
+              </div>
+              <div class="chart-frame" style="height: 240px;">
+                <canvas id="expense-trend-chart"></canvas>
+              </div>
+            </article>
+          </div>
+
+          <!-- Budgets Progress Panel -->
+          <article class="panel" style="margin-bottom: 20px;">
+            <div class="panel-heading">
+              <div>
+                <h2>Category budgets vs. actual spending</h2>
+                <p>Real-time progress bars with alerts for categories nearing or exceeding limits</p>
+              </div>
+              <button class="primary-button small-button" id="add-budget-quick-btn" type="button"><i class="fa-solid fa-plus"></i> Set Budget</button>
+            </div>
+            <div id="budget-progress-container" class="budget-bars-list" style="padding: 10px 0;"></div>
+            <div id="budgets-empty" class="empty-state" hidden style="padding: 20px 0;">
+              <p>No budgets configured for this month. Click "Set Budget" to define spending limits.</p>
+            </div>
+          </article>
+
+          <!-- Filter & Search Toolbar -->
+          <article class="panel">
+            <div class="panel-heading" style="flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h2>Transaction history</h2>
+                <p id="expense-list-count">All stored transactions</p>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <input type="text" id="expense-search" placeholder="Search notes or category..." style="width: 200px; padding: 6px 10px; margin: 0; font-size: 13px;">
+                <select id="expense-type-filter" style="width: 120px; padding: 6px 10px; margin: 0; font-size: 13px;">
+                  <option value="">All Types</option>
+                  <option value="expense">Expenses</option>
+                  <option value="income">Income</option>
+                </select>
+                <select id="expense-category-filter" style="width: 140px; padding: 6px 10px; margin: 0; font-size: 13px;">
+                  <option value="">All Categories</option>
+                </select>
+                <select id="expense-source-filter" style="width: 120px; padding: 6px 10px; margin: 0; font-size: 13px;">
+                  <option value="">All Sources</option>
+                  <option value="manual">Manual</option>
+                  <option value="csv">CSV Import</option>
+                  <option value="bank">Bank Sync</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>TYPE</th>
+                    <th>DATE</th>
+                    <th>CATEGORY</th>
+                    <th>PAYMENT METHOD</th>
+                    <th>NOTES / DESCRIPTION</th>
+                    <th>SOURCE</th>
+                    <th class="align-right">AMOUNT</th>
+                    <th class="align-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="expenses-table-body"></tbody>
+              </table>
+            </div>
+            <div id="expenses-table-empty" class="empty-state" hidden>
+              <i class="fa-solid fa-receipt"></i>
+              <p>No transactions found for the selected filters. Use "Add Transaction" or "Import CSV" to get started.</p>
+            </div>
+          </article>
         </section>
 
         <section class="screen" id="screen-investments" hidden>
@@ -816,8 +970,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-advisor" hidden>
-          <div class="page-heading"><div><p class="eyebrow">SAFE, INFORMATIVE, GROUNDED IN YOUR DEMO</p><h1>AI insights</h1><p class="subtitle">Ask about what’s visible in your consent-authorized FinForge workspace.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Local fallback</span></div>
-          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL WELLNESS, WITHOUT THE NOISE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinForge’s demo advisor summarizes only the synthetic records available in your workspace. It does not make trades or take actions.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Uses authorized demo data</span><span><i class="fa-solid fa-check"></i> Explains where figures come from</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinForge</h2><p>Safe deterministic fallback is ready</p></div><span class="online-indicator"><i></i> AVAILABLE</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight</b><p>Hi <span id="advisor-name">there</span>! I can summarize your synthetic cash flow or net-worth snapshot. What would you like to understand?</p></div></div></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your demo records</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational demo only—not financial, tax, investment, or legal advice. Verify important decisions with a qualified professional.</p></article></div>
+          <div class="page-heading"><div><p class="eyebrow">REAL-TIME FINANCIAL INTELLIGENCE</p><h1>AI insights</h1><p class="subtitle">Ask questions dynamically analyzed against your real financial metrics, portfolio, and expenses.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Real-Time AI</span></div>
+          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL INTELLIGENCE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s AI advisor dynamically analyzes your real income, expenses, category spending, and investment portfolio. It does not make trades or transfer funds.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Grounded in your real data</span><span><i class="fa-solid fa-check"></i> Clear data attribution</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync AI</h2><p>Live AI analysis grounded in your data</p></div><span class="online-indicator"><i></i> READY</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI</b><p>Hi <span id="advisor-name">there</span>! I can analyze your income, expenses, savings rate, portfolio, and category budgets. What would you like to explore?</p></div></div></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your finances</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending and savings rate this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational analysis only—not financial, tax, investment, or legal advice. Verify critical decisions with a qualified professional.</p></article></div>
         </section>
 
         <section class="screen" id="screen-payments" hidden>
@@ -832,7 +986,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <article class="panel privacy-details"><div class="panel-heading"><div><h2>Data boundaries</h2><p>What this local prototype does—and does not—do.</p></div></div><div class="boundary-grid"><div><i class="fa-solid fa-database"></i><b>Local MySQL</b><p>Profile and synthetic app records are stored in the XAMPP database you configure.</p></div><div><i class="fa-solid fa-plug-circle-xmark"></i><b>No live providers</b><p>Mock adapters normalize fixture data only. FinForge never asks for bank credentials.</p></div><div><i class="fa-solid fa-credit-card"></i><b>No real money</b><p>Payment and renewal flows only create demo receipts in your local database.</p></div></div></article>
         </section>
       </main>
-      <footer class="app-footer"><span>FinForge <span id="footer-year"></span></span><span><i class="fa-solid fa-flask"></i> Local informational demo · Synthetic financial records only</span></footer>
+      <footer class="app-footer"><span>FinSync <span id="footer-year"></span></span><span><i class="fa-solid fa-shield-halved"></i> Multi-Broker, Secure Banking &amp; Personal Finance Management</span></footer>
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -1078,7 +1232,211 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
       </form>
     </article>
   </dialog>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="<?= Security::escape($basePath) ?>/assets/app.js?v=<?= @filemtime(__DIR__ . '/assets/app.js') ?: '2' ?>" defer></script>
+  <!-- FORGOT PASSWORD MODAL -->
+  <dialog id="forgot-password-modal" class="family-account-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" id="forgot-password-close"></button>
+        <h2><i class="fa-solid fa-key"></i> Reset Your Password</h2>
+      </header>
+      <form id="forgot-password-form">
+        <p class="modal-sub">Enter the email address associated with your account. A secure reset token will be generated.</p>
+        <label>Account Email
+          <input type="email" name="email" id="forgot-email-input" placeholder="you@example.com" required>
+        </label>
+        <div id="reset-token-display" hidden style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin: 12px 0;">
+          <p style="margin: 0 0 6px; font-weight: 600; color: #166534; font-size: 13px;"><i class="fa-solid fa-check-circle"></i> Password Reset Token Generated:</p>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="generated-reset-token" readonly style="font-family: monospace; font-size: 12px; margin: 0; background: #fff;">
+            <button type="button" id="copy-reset-token-btn" class="outline-button small-button" style="white-space: nowrap;"><i class="fa-solid fa-copy"></i> Copy</button>
+          </div>
+          <div style="margin-top: 10px; text-align: right;">
+            <button type="button" id="proceed-to-reset-btn" class="primary-button small-button">Proceed to Set New Password <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+        <p id="forgot-password-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer id="forgot-password-footer">
+          <button type="submit" id="forgot-password-submit" class="primary-button full-button"><i class="fa-solid fa-envelope"></i> Request Reset Token</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- RESET PASSWORD MODAL -->
+  <dialog id="reset-password-modal" class="family-account-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" id="reset-password-close"></button>
+        <h2><i class="fa-solid fa-lock"></i> Set New Password</h2>
+      </header>
+      <form id="reset-password-form">
+        <p class="modal-sub">Enter your email, reset token, and your new password.</p>
+        <label>Account Email
+          <input type="email" name="email" id="reset-email-input" placeholder="you@example.com" required>
+        </label>
+        <label>Reset Token
+          <input type="text" name="token" id="reset-token-input" placeholder="Paste 64-character token" required>
+        </label>
+        <label>New Password (min 10 characters)
+          <input type="password" name="new_password" id="reset-new-password" minlength="10" placeholder="New secure password" required>
+        </label>
+        <label>Confirm New Password
+          <input type="password" name="confirm_password" id="reset-confirm-password" minlength="10" placeholder="Re-enter new password" required>
+        </label>
+        <p id="reset-password-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="reset-password-submit" class="primary-button full-button"><i class="fa-solid fa-check"></i> Reset Password &amp; Sign In</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- ADD / EDIT EXPENSE & INCOME MODAL -->
+  <dialog id="expense-entry-modal" class="family-account-modal">
+    <article style="max-width: 540px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="expense-modal-close"></button>
+        <h2 id="expense-modal-title"><i class="fa-solid fa-receipt"></i> Add Transaction</h2>
+      </header>
+      <form id="expense-entry-form">
+        <input type="hidden" name="id" id="expense-edit-id">
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <button type="button" class="outline-button small-button tx-type-btn active" data-type="expense" id="tx-type-expense-btn" style="flex: 1;"><i class="fa-solid fa-arrow-up-long" style="color:#ef4444;"></i> Expense</button>
+          <button type="button" class="outline-button small-button tx-type-btn" data-type="income" id="tx-type-income-btn" style="flex: 1;"><i class="fa-solid fa-arrow-down-long" style="color:#10b981;"></i> Income</button>
+        </div>
+        <input type="hidden" name="type" id="expense-type-val" value="expense">
+
+        <div class="form-row-2">
+          <label>Amount (₹)
+            <input type="number" step="0.01" min="0.01" name="amount" id="expense-amount-input" placeholder="e.g. 1500.00" required>
+          </label>
+          <label>Transaction Date
+            <input type="date" name="transaction_date" id="expense-date-input" required>
+          </label>
+        </div>
+
+        <div class="form-row-2">
+          <label>Category
+            <select name="category" id="expense-category-select" required>
+              <option value="">Select Category...</option>
+              <option value="Food">Food</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Transport">Transport</option>
+              <option value="Fuel">Fuel</option>
+              <option value="Rent">Rent</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Healthcare">Healthcare</option>
+              <option value="Education">Education</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Travel">Travel</option>
+              <option value="Investments">Investments</option>
+              <option value="Loan payments">Loan payments</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Salary">Salary</option>
+              <option value="Business income">Business income</option>
+              <option value="Other income">Other income</option>
+            </select>
+          </label>
+          <label>Subcategory (Optional)
+            <input type="text" name="subcategory" id="expense-subcategory-input" placeholder="e.g. Dining, Snacks, Electricity">
+          </label>
+        </div>
+
+        <label>Payment Method
+          <select name="payment_method" id="expense-payment-method">
+            <option value="cash">Cash</option>
+            <option value="upi">UPI (GPay / PhonePe / Paytm)</option>
+            <option value="credit_card">Credit Card</option>
+            <option value="debit_card">Debit Card</option>
+            <option value="net_banking">Net Banking</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+
+        <label>Notes / Description
+          <textarea name="notes" id="expense-notes-input" rows="2" placeholder="e.g. Weekly grocery shopping at supermarket"></textarea>
+        </label>
+
+        <p id="expense-form-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="expense-form-submit" class="primary-button full-button"><i class="fa-solid fa-save"></i> Save Transaction</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- CSV IMPORT MODAL -->
+  <dialog id="expense-csv-modal" class="family-account-modal">
+    <article style="max-width: 580px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="expense-csv-close"></button>
+        <h2><i class="fa-solid fa-file-csv"></i> Import Transactions via CSV</h2>
+      </header>
+      <form id="expense-csv-form">
+        <p class="modal-sub">Import bank statements or expense sheets. FinSync automatically detects headers (Date, Amount, Category, Description) and flags duplicate entries.</p>
+        
+        <label>Select CSV file
+          <input type="file" id="expense-csv-file-input" accept=".csv,text/csv">
+        </label>
+
+        <div style="text-align: center; margin: 8px 0; font-size: 11px; color: #64748b;">— OR PASTE CSV TEXT DIRECTLY —</div>
+
+        <label>CSV Content
+          <textarea id="expense-csv-textarea" rows="6" placeholder="Date,Description,Category,Amount&#10;2026-11-01,Supermarket,Groceries,2450.00&#10;2026-11-02,Salary Credit,Salary,75000.00" style="font-family: monospace; font-size: 11px;"></textarea>
+        </label>
+
+        <div id="expense-csv-report" hidden style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px; margin: 10px 0; font-size: 12px; color: #166534;"></div>
+        <p id="expense-csv-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="expense-csv-submit" class="primary-button full-button"><i class="fa-solid fa-upload"></i> Process &amp; Import</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- BUDGET MANAGEMENT MODAL -->
+  <dialog id="budget-modal" class="family-account-modal">
+    <article style="max-width: 540px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="budget-modal-close"></button>
+        <h2><i class="fa-solid fa-bullseye"></i> Monthly Category Budgets</h2>
+      </header>
+      <form id="budget-form">
+        <p class="modal-sub">Set monthly spending limits for expense categories. FinSync alerts you when spending reaches 85% and warns when exceeded.</p>
+        
+        <div class="form-row-2">
+          <label>Category
+            <select name="category" id="budget-category-select" required>
+              <option value="Food">Food</option>
+              <option value="Groceries">Groceries</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Transport">Transport</option>
+              <option value="Fuel">Fuel</option>
+              <option value="Rent">Rent</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Healthcare">Healthcare</option>
+              <option value="Education">Education</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Travel">Travel</option>
+              <option value="Loan payments">Loan payments</option>
+              <option value="Insurance">Insurance</option>
+            </select>
+          </label>
+          <label>Monthly Limit (₹)
+            <input type="number" step="0.01" min="0" name="monthly_limit" id="budget-limit-input" placeholder="e.g. 10000" required>
+          </label>
+        </div>
+
+        <p id="budget-form-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="budget-form-submit" class="primary-button full-button"><i class="fa-solid fa-check"></i> Save Budget Limit</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" nonce="<?= Security::escape($nonce) ?>"></script>
+  <script src="<?= Security::escape($basePath) ?>/assets/app.js?v=<?= @filemtime(__DIR__ . '/assets/app.js') ?: '2' ?>" defer nonce="<?= Security::escape($nonce) ?>"></script>
 </body>
 </html>

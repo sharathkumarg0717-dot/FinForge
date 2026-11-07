@@ -2,7 +2,7 @@
   'use strict';
 
   const base = window.FINSYNC_BASE || '';
-  const state = { csrf: '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], familyOverview: null, selectedFamilyMemberId: null, investments: [], zerodha: null, transactions: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null };
+  const state = { csrf: window.FINSYNC_CSRF || '', user: null, consent: false, dashboard: null, personalFinance: null, accounts: [], family: [], familyOverview: null, selectedFamilyMemberId: null, investments: [], zerodha: null, transactions: [], recurring: [], notifications: [], payments: [], cashChart: null, categoryChart: null, personalCashChart: null, personalCategoryChart: null, expenseCategoryChart: null, expenseTrendChart: null, expenses: [] };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const money = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(value) || 0);
@@ -85,8 +85,10 @@
     });
     $('#name-field').hidden = !registering;
     $('#consent-field').hidden = !registering;
-    $('#auth-title').textContent = registering ? 'Create your demo space' : 'Sign in to your space';
-    $('#auth-subtitle').textContent = registering ? 'Set up a private local workspace with synthetic data.' : 'A household overview, designed around clarity.';
+    const forgotRow = $('#forgot-password-row');
+    if (forgotRow) forgotRow.hidden = registering;
+    $('#auth-title').textContent = registering ? 'Create your FinSync account' : 'Sign in to FinSync';
+    $('#auth-subtitle').textContent = registering ? 'Set up your secure, multi-broker financial workspace.' : 'A comprehensive view of your wealth, investments, and expenses.';
     $('#auth-submit span').textContent = registering ? 'Create account' : 'Sign in';
     const password = $('#auth-form [name="password"]');
     password.autocomplete = registering ? 'new-password' : 'current-password';
@@ -99,7 +101,7 @@
   function goTo(screen) {
     const valid = ['personal-finance', 'overview', 'family', 'accounts', 'transactions', 'investments', 'reminders', 'advisor', 'payments', 'consent'];
     if (!valid.includes(screen)) screen = 'overview';
-    if (!state.consent && screen !== 'consent' && screen !== 'personal-finance') {
+    if (!state.consent && screen !== 'consent' && screen !== 'personal-finance' && screen !== 'transactions') {
       screen = 'overview';
       $('#consent-gate').hidden = false;
       $$('.screen').forEach((section) => { section.hidden = true; });
@@ -109,14 +111,14 @@
     }
     $$('.nav-link').forEach((item) => item.classList.toggle('active', item.dataset.nav === screen));
     $('#page-crumb').textContent = screen[0].toUpperCase() + screen.slice(1).replace('-', ' ');
-    $('#workspace-mode-label').textContent = screen === 'personal-finance' ? 'PERSONAL DATA' : 'DEMO DATA';
+    $('#workspace-mode-label').textContent = (screen === 'personal-finance' || screen === 'transactions') ? 'PERSONAL DATA' : 'DEMO DATA';
     $('#sidebar').classList.remove('sidebar-open');
     if (screen === 'consent') refreshConsent();
-    if (state.consent || screen === 'personal-finance') {
+    if (state.consent || screen === 'personal-finance' || screen === 'transactions') {
       const loaders = {
         'personal-finance': () => loadPersonalFinance($('#finance-month').value || currentMonth()),
         overview: loadDashboard, family: loadFamily, accounts: loadAccounts,
-        transactions: () => loadTransactions($('#transaction-filter').value),
+        transactions: () => loadExpensesModule(),
         investments: loadInvestments, reminders: loadReminders,
         payments: loadPayments,
       };
@@ -767,6 +769,309 @@
     $('#accounts-table').innerHTML = state.accounts.map((account) => `<tr><td><span class="institution-cell"><span class="account-icon"><i class="fa-solid ${icons[account.account_type] || 'fa-wallet'}"></i></span><span><b>${esc(account.institution)}</b><small>Mock provider</small></span></span></td><td>${esc(account.member_name)}</td><td><span class="type-chip">${esc(account.account_type)}</span></td><td class="masked">${esc(account.masked_number)}</td><td class="align-right"><b class="${Number(account.balance) < 0 ? 'amount-expense' : ''}">${money(account.balance)}</b></td></tr>`).join('');
   }
 
+  // --- PHASE 2: EXPENSES, INCOME & BUDGET MODULE ---
+  async function loadExpensesModule() {
+    const month = $('#expense-filter-month')?.value || currentMonth();
+    if ($('#expense-filter-month') && !$('#expense-filter-month').value) {
+      $('#expense-filter-month').value = month;
+    }
+    await Promise.all([
+      loadExpensesList(),
+      loadExpenseReport(month),
+      loadExpenseCategories(),
+    ]);
+  }
+
+  async function loadExpenseCategories() {
+    try {
+      const cats = await api('/api/expense-categories');
+      const catFilter = $('#expense-category-filter');
+      const expenseSelect = $('#expense-category-select');
+      const budgetSelect = $('#budget-category-select');
+
+      if (catFilter) {
+        const curVal = catFilter.value;
+        const options = ['<option value="">All Categories</option>'];
+        cats.forEach((c) => {
+          options.push(`<option value="${esc(c.name)}">${esc(c.name)} (${esc(c.type)})</option>`);
+        });
+        catFilter.innerHTML = options.join('');
+        catFilter.value = curVal;
+      }
+
+      if (expenseSelect) {
+        const curVal = expenseSelect.value;
+        const options = ['<option value="">Select Category...</option>'];
+        cats.forEach((c) => {
+          options.push(`<option value="${esc(c.name)}">${esc(c.name)} (${esc(c.type)})</option>`);
+        });
+        expenseSelect.innerHTML = options.join('');
+        if (curVal) expenseSelect.value = curVal;
+      }
+
+      if (budgetSelect) {
+        const curVal = budgetSelect.value;
+        const options = [];
+        cats.filter(c => c.type === 'expense').forEach((c) => {
+          options.push(`<option value="${esc(c.name)}">${esc(c.name)}</option>`);
+        });
+        budgetSelect.innerHTML = options.join('');
+        if (curVal) budgetSelect.value = curVal;
+      }
+    } catch (e) {
+      // fallback
+    }
+  }
+
+  async function loadExpensesList() {
+    const month = $('#expense-filter-month')?.value || '';
+    const type = $('#expense-type-filter')?.value || '';
+    const category = $('#expense-category-filter')?.value || '';
+    const source = $('#expense-source-filter')?.value || '';
+    const search = $('#expense-search')?.value || '';
+
+    const params = new URLSearchParams();
+    if (month) params.set('month', month);
+    if (type) params.set('type', type);
+    if (category) params.set('category', category);
+    if (source) params.set('source', source);
+    if (search) params.set('search', search);
+
+    try {
+      const list = await api(`/api/expenses?${params.toString()}`);
+      state.expenses = list || [];
+      const tbody = $('#expenses-table-body');
+      const emptyEl = $('#expenses-table-empty');
+      const countEl = $('#expense-list-count');
+
+      if (countEl) countEl.textContent = `${state.expenses.length} transaction${state.expenses.length === 1 ? '' : 's'}`;
+      if (emptyEl) emptyEl.hidden = state.expenses.length > 0;
+
+      if (tbody) {
+        tbody.innerHTML = state.expenses.map((tx) => {
+          const isIncome = tx.type === 'income';
+          const typeBadge = isIncome
+            ? '<span class="status-chip success-chip"><i class="fa-solid fa-arrow-down-long"></i> Income</span>'
+            : '<span class="status-chip warning-chip" style="background:#fee2e2; color:#b91c1c;"><i class="fa-solid fa-arrow-up-long"></i> Expense</span>';
+          
+          let sourceBadge = '<span class="status-chip neutral-chip"><i class="fa-solid fa-pen"></i> Manual</span>';
+          if (tx.source === 'csv') {
+            sourceBadge = '<span class="status-chip info-chip" style="background:#e0e7ff; color:#4338ca;"><i class="fa-solid fa-file-csv"></i> CSV</span>';
+          } else if (tx.source === 'bank') {
+            sourceBadge = '<span class="status-chip success-chip"><i class="fa-solid fa-building-columns"></i> Bank</span>';
+          }
+
+          const dupBadge = tx.is_duplicate ? '<span class="status-chip warning-chip" title="Possible duplicate entry detected" style="font-size:10px; margin-left:4px;"><i class="fa-solid fa-copy"></i> Dup?</span>' : '';
+
+          return `
+            <tr data-id="${tx.id}">
+              <td>${typeBadge}</td>
+              <td style="white-space: nowrap;">${dateLabel(tx.transaction_date)}</td>
+              <td>
+                <b>${esc(tx.category)}</b>
+                ${tx.subcategory ? `<br><small class="muted">${esc(tx.subcategory)}</small>` : ''}
+              </td>
+              <td style="text-transform: capitalize;">${esc(tx.payment_method.replace('_', ' '))}</td>
+              <td>${esc(tx.notes || '—')}</td>
+              <td>${sourceBadge}${dupBadge}</td>
+              <td class="align-right"><b class="${isIncome ? 'amount-income' : 'amount-expense'}">${isIncome ? '+' : '−'}${money(tx.amount)}</b></td>
+              <td class="align-right" style="white-space: nowrap;">
+                <button type="button" class="icon-button expense-edit-btn" data-id="${tx.id}" title="Edit"><i class="fa-solid fa-pencil"></i></button>
+                <button type="button" class="icon-button expense-delete-btn" data-id="${tx.id}" title="Delete" style="color:#ef4444;"><i class="fa-solid fa-trash"></i></button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    } catch (err) {
+      handleError(err);
+    }
+  }
+
+  async function loadExpenseReport(month) {
+    if (!month) month = currentMonth();
+    try {
+      const rep = await api(`/api/expenses/report?month=${encodeURIComponent(month)}`);
+      if (!rep) return;
+
+      // Update stat cards
+      if ($('#exp-total-income')) $('#exp-total-income').textContent = money(rep.total_income);
+      if ($('#exp-total-expenses')) $('#exp-total-expenses').textContent = money(rep.total_expenses);
+      if ($('#exp-net-savings')) $('#exp-net-savings').textContent = money(rep.net_savings);
+      if ($('#exp-savings-rate')) $('#exp-savings-rate').textContent = `Savings rate: ${rep.savings_rate}%`;
+
+      // Budget health summary
+      const budgets = rep.budgets || [];
+      const exceeded = budgets.filter((b) => b.is_exceeded).length;
+      const warning = budgets.filter((b) => b.is_warning).length;
+      if ($('#exp-budget-status')) {
+        if (exceeded > 0) {
+          $('#exp-budget-status').textContent = `${exceeded} Exceeded!`;
+          $('#exp-budget-status').style.color = '#ef4444';
+        } else if (warning > 0) {
+          $('#exp-budget-status').textContent = `${warning} Near Limit`;
+          $('#exp-budget-status').style.color = '#f59e0b';
+        } else {
+          $('#exp-budget-status').textContent = 'On Track';
+          $('#exp-budget-status').style.color = '#10b981';
+        }
+      }
+      if ($('#exp-budget-sub')) $('#exp-budget-sub').textContent = `${budgets.length} category budgets set`;
+
+      // Render Budget Bars
+      const budgetContainer = $('#budget-progress-container');
+      const budgetsEmpty = $('#budgets-empty');
+      if (budgetContainer && budgetsEmpty) {
+        budgetsEmpty.hidden = budgets.length > 0;
+        budgetContainer.innerHTML = budgets.map((b) => {
+          let barColor = '#10b981';
+          let statusChip = '<span class="status-chip success-chip" style="font-size:11px;">On track</span>';
+          if (b.is_exceeded) {
+            barColor = '#ef4444';
+            statusChip = '<span class="status-chip warning-chip" style="background:#fee2e2; color:#b91c1c; font-size:11px;"><i class="fa-solid fa-circle-exclamation"></i> Over budget by ' + money(b.actual_spent - b.monthly_limit) + '</span>';
+          } else if (b.is_warning) {
+            barColor = '#f59e0b';
+            statusChip = '<span class="status-chip warning-chip" style="background:#fef3c7; color:#b45309; font-size:11px;"><i class="fa-solid fa-triangle-exclamation"></i> Near limit (' + b.percentage + '%)</span>';
+          }
+          const barWidth = Math.min(100, b.percentage);
+
+          return `
+            <div style="margin-bottom: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-weight: 600; font-size: 14px;">${esc(b.category)}</span>
+                <div>${statusChip}</div>
+              </div>
+              <div style="height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; margin-bottom: 6px;">
+                <div style="width: ${barWidth}%; height: 100%; background: ${barColor}; border-radius: 5px; transition: width 0.4s ease;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b;">
+                <span>Spent: <b>${money(b.actual_spent)}</b> of ${money(b.monthly_limit)}</span>
+                <span>Remaining: <b>${money(b.remaining)}</b> (${b.percentage}%)</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Render Category Chart
+      renderExpenseCategoryChart(rep.category_breakdown || []);
+
+      // Render Trends Chart
+      renderExpenseTrendChart(rep.trends || []);
+    } catch (e) {
+      console.warn('Expense report error:', e);
+    }
+  }
+
+  function renderExpenseCategoryChart(categories) {
+    const canvas = $('#expense-category-chart');
+    const emptyEl = $('#expense-category-empty');
+    if (!canvas) return;
+
+    if (!categories.length) {
+      if (emptyEl) emptyEl.hidden = false;
+      if (state.expenseCategoryChart) {
+        state.expenseCategoryChart.destroy();
+        state.expenseCategoryChart = null;
+      }
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+
+    const labels = categories.map((c) => c.category);
+    const data = categories.map((c) => c.amount);
+    const colors = [
+      '#6366f1', '#ec4899', '#f97316', '#eab308', '#10b981',
+      '#06b6d4', '#8b5cf6', '#ef4444', '#14b8a6', '#f43f5e',
+      '#3b82f6', '#84cc16', '#a855f7', '#0ea5e9'
+    ];
+
+    if (state.expenseCategoryChart) {
+      state.expenseCategoryChart.destroy();
+    }
+
+    state.expenseCategoryChart = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors.slice(0, data.length),
+          borderWidth: 2,
+          borderColor: '#ffffff',
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (item) => ` ${item.label}: ${money(item.raw)} (${categories[item.dataIndex]?.percentage || 0}%)`
+            }
+          }
+        },
+        cutout: '65%',
+      }
+    });
+  }
+
+  function renderExpenseTrendChart(trends) {
+    const canvas = $('#expense-trend-chart');
+    if (!canvas || !trends.length) return;
+
+    const labels = trends.map((t) => t.month);
+    const incomeData = trends.map((t) => t.income);
+    const expenseData = trends.map((t) => t.expense);
+
+    if (state.expenseTrendChart) {
+      state.expenseTrendChart.destroy();
+    }
+
+    state.expenseTrendChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Income',
+            data: incomeData,
+            backgroundColor: '#10b981',
+            borderRadius: 4,
+          },
+          {
+            label: 'Expenses',
+            data: expenseData,
+            backgroundColor: '#ef4444',
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (val) => '₹' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val)
+            }
+          }
+        },
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (item) => ` ${item.dataset.label}: ${money(item.raw)}`
+            }
+          }
+        }
+      }
+    });
+  }
+
   async function loadTransactions(category = '') {
     const query = category ? `?category=${encodeURIComponent(category)}` : '';
     state.transactions = await api(`/api/transactions${query}`);
@@ -953,17 +1258,22 @@
     input.value = '';
     const pending = document.createElement('div');
     pending.className = 'chat-bubble assistant-bubble pending-bubble';
-    pending.innerHTML = '<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight</b><p><i class="fa-solid fa-circle-notch fa-spin"></i> Reviewing your demo snapshot…</p></div>';
+    pending.innerHTML = '<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI Insight</b><p><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing your financial data…</p></div>';
     messages.append(pending);
     messages.scrollTop = messages.scrollHeight;
     try {
       const result = await api('/api/advisor', { method: 'POST', body: { question } });
       pending.classList.remove('pending-bubble');
-      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinForge insight · Local fallback</b><p>${esc(result.answer)}</p><small>${esc(result.disclaimer)}</small></div>`;
+      let badgeLabel = 'Dynamic Analysis';
+      if (result.mode === 'live_ai_openai') badgeLabel = `Live AI (${result.model || 'OpenAI'})`;
+      else if (result.mode === 'live_ai_gemini') badgeLabel = `Live AI (${result.model || 'Gemini'})`;
+      else if (result.mode === 'api_error') badgeLabel = 'API Notice';
+
+      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI · ${esc(badgeLabel)}</b><p style="white-space: pre-wrap;">${esc(result.answer)}</p><small>${esc(result.disclaimer)}</small></div>`;
     } catch (error) {
       pending.classList.remove('pending-bubble');
       pending.classList.add('error-bubble');
-      pending.innerHTML = `<span class="chat-avatar error-avatar"><i class="fa-solid fa-circle-exclamation"></i></span><div><b>FinForge insight</b><p class="chat-error-text">${esc(error.message || 'Unable to generate insight at this time. Please try again.')}</p></div>`;
+      pending.innerHTML = `<span class="chat-avatar error-avatar"><i class="fa-solid fa-circle-exclamation"></i></span><div><b>FinSync AI</b><p class="chat-error-text">${esc(error.message || 'Unable to generate insight at this time. Please try again.')}</p></div>`;
       handleError(error);
     } finally {
       if (submitBtn) submitBtn.disabled = false;
@@ -1058,11 +1368,131 @@
     button.disabled = true;
     try {
       const result = await api(mode === 'register' ? '/api/register' : '/api/login', { method: 'POST', body: data });
-      await completeAuth(result, mode === 'register' ? 'Your local demo workspace is ready.' : 'Welcome back.');
+      await completeAuth(result, mode === 'register' ? 'Your FinSync workspace is ready.' : 'Welcome back.');
     } catch (error) {
       message.textContent = error.message;
       message.classList.add('error-text');
     } finally { button.disabled = false; }
+  });
+
+  // Forgot Password Modal
+  $('#forgot-password-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const modal = $('#forgot-password-modal');
+    const emailInput = $('#forgot-email-input');
+    const loginEmail = $('#auth-form [name="email"]')?.value.trim();
+    if (emailInput && loginEmail) emailInput.value = loginEmail;
+    const errEl = $('#forgot-password-error');
+    if (errEl) errEl.textContent = '';
+    const tokenDisplay = $('#reset-token-display');
+    if (tokenDisplay) tokenDisplay.hidden = true;
+    modal?.showModal();
+  });
+
+  $('#forgot-password-close')?.addEventListener('click', () => {
+    $('#forgot-password-modal')?.close();
+  });
+
+  $('#forgot-password-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = ($('#forgot-email-input')?.value || '').trim();
+    const errEl = $('#forgot-password-error');
+    const submitBtn = $('#forgot-password-submit');
+    const tokenDisplay = $('#reset-token-display');
+    const tokenInput = $('#generated-reset-token');
+    if (errEl) errEl.textContent = '';
+
+    if (!email) {
+      if (errEl) errEl.textContent = 'Please enter your account email.';
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await api('/api/forgot-password', { method: 'POST', body: { email } });
+      if (res?.reset_token && tokenDisplay && tokenInput) {
+        tokenInput.value = res.reset_token;
+        tokenDisplay.hidden = false;
+        toast('Reset token generated!');
+      } else {
+        toast(res?.message || 'If that email exists, a reset link has been processed.');
+      }
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not request reset.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  $('#copy-reset-token-btn')?.addEventListener('click', () => {
+    const tokenInput = $('#generated-reset-token');
+    if (tokenInput && tokenInput.value) {
+      navigator.clipboard.writeText(tokenInput.value).then(() => {
+        toast('Reset token copied to clipboard!');
+      }).catch(() => {
+        tokenInput.select();
+        document.execCommand('copy');
+        toast('Reset token copied!');
+      });
+    }
+  });
+
+  $('#proceed-to-reset-btn')?.addEventListener('click', () => {
+    const email = ($('#forgot-email-input')?.value || '').trim();
+    const token = ($('#generated-reset-token')?.value || '').trim();
+    $('#forgot-password-modal')?.close();
+    const resetModal = $('#reset-password-modal');
+    if ($('#reset-email-input')) $('#reset-email-input').value = email;
+    if ($('#reset-token-input')) $('#reset-token-input').value = token;
+    const errEl = $('#reset-password-error');
+    if (errEl) errEl.textContent = '';
+    resetModal?.showModal();
+  });
+
+  $('#reset-password-close')?.addEventListener('click', () => {
+    $('#reset-password-modal')?.close();
+  });
+
+  $('#reset-password-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = ($('#reset-email-input')?.value || '').trim();
+    const token = ($('#reset-token-input')?.value || '').trim();
+    const newPassword = ($('#reset-new-password')?.value || '').trim();
+    const confirmPassword = ($('#reset-confirm-password')?.value || '').trim();
+    const errEl = $('#reset-password-error');
+    const submitBtn = $('#reset-password-submit');
+    if (errEl) errEl.textContent = '';
+
+    if (newPassword !== confirmPassword) {
+      if (errEl) errEl.textContent = 'Passwords do not match.';
+      return;
+    }
+    if (newPassword.length < 10) {
+      if (errEl) errEl.textContent = 'Password must be at least 10 characters.';
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await api('/api/reset-password', {
+        method: 'POST',
+        body: { email, token, password: newPassword, password_confirm: confirmPassword }
+      });
+      $('#reset-password-modal')?.close();
+      toast('Password reset successfully! Please sign in with your new password.');
+      setAuthMode('login');
+      const authEmail = $('#auth-form [name="email"]');
+      if (authEmail) authEmail.value = email;
+      const authPass = $('#auth-form [name="password"]');
+      if (authPass) {
+        authPass.value = '';
+        authPass.focus();
+      }
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Failed to reset password.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
   });
 
   $$('.auth-tab').forEach((button) => button.addEventListener('click', () => setAuthMode(button.dataset.authMode)));
@@ -1157,6 +1587,28 @@
       try { await api(`/api/family/${Number(deactivate.dataset.id)}`, { method: 'PATCH', body: { status: 'inactive' } }); await loadFamily(); toast('Family profile deactivated.'); }
       catch (error) { handleError(error); }
     }
+  });
+
+  $('#logout-all-button')?.addEventListener('click', async () => {
+    if (!window.confirm('Sign out from ALL devices? Your sessions across all browsers will be terminated.')) return;
+    try {
+      await api('/api/logout-all', { method: 'POST', body: {} });
+    } catch (error) {
+      handleError(error);
+    }
+    state.user = null;
+    state.consent = false;
+    state.csrf = '';
+    clearPersonalFinanceView();
+    try {
+      const anonymousSession = await api('/api/session');
+      state.csrf = anonymousSession.csrf_token || '';
+    } catch (error) {
+      showNotice(error.message || 'Refresh the page before signing in again.', 'error');
+    }
+    showAuth();
+    initGoogleAuth();
+    toast('You have been signed out from all devices.');
   });
 
   $('#logout-button').addEventListener('click', async () => {
@@ -1650,6 +2102,226 @@
       await loadInvestments();
     } catch (err) {
       if (errEl) errEl.textContent = err.message || 'Could not add holding.';
+    }
+  });
+
+  // --- Expense & Income Modals & Actions ---
+  const resetExpenseForm = () => {
+    $('#expense-entry-form')?.reset();
+    if ($('#expense-edit-id')) $('#expense-edit-id').value = '';
+    if ($('#expense-type-val')) $('#expense-type-val').value = 'expense';
+    $('#tx-type-expense-btn')?.classList.add('active');
+    $('#tx-type-income-btn')?.classList.remove('active');
+    if ($('#expense-date-input')) $('#expense-date-input').value = new Date().toISOString().split('T')[0];
+    if ($('#expense-modal-title')) $('#expense-modal-title').innerHTML = '<i class="fa-solid fa-receipt"></i> Add Transaction';
+    if ($('#expense-form-error')) $('#expense-form-error').textContent = '';
+  };
+
+  $('#open-expense-modal-btn')?.addEventListener('click', () => {
+    resetExpenseForm();
+    $('#expense-entry-modal')?.showModal();
+  });
+
+  $('#expense-modal-close')?.addEventListener('click', () => $('#expense-entry-modal')?.close());
+
+  $('#tx-type-expense-btn')?.addEventListener('click', () => {
+    $('#tx-type-expense-btn').classList.add('active');
+    $('#tx-type-income-btn').classList.remove('active');
+    if ($('#expense-type-val')) $('#expense-type-val').value = 'expense';
+  });
+
+  $('#tx-type-income-btn')?.addEventListener('click', () => {
+    $('#tx-type-income-btn').classList.add('active');
+    $('#tx-type-expense-btn').classList.remove('active');
+    if ($('#expense-type-val')) $('#expense-type-val').value = 'income';
+  });
+
+  $('#expense-entry-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const id = ($('#expense-edit-id')?.value || '').trim();
+    const type = ($('#expense-type-val')?.value || 'expense').trim();
+    const amount = parseFloat($('#expense-amount-input')?.value) || 0;
+    const date = ($('#expense-date-input')?.value || '').trim();
+    const category = ($('#expense-category-select')?.value || '').trim();
+    const subcategory = ($('#expense-subcategory-input')?.value || '').trim();
+    const paymentMethod = ($('#expense-payment-method')?.value || 'cash').trim();
+    const notes = ($('#expense-notes-input')?.value || '').trim();
+    const errEl = $('#expense-form-error');
+    const submitBtn = $('#expense-form-submit');
+    if (errEl) errEl.textContent = '';
+
+    if (amount <= 0) {
+      if (errEl) errEl.textContent = 'Please enter a valid amount.';
+      return;
+    }
+    if (!category) {
+      if (errEl) errEl.textContent = 'Please select a category.';
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const payload = {
+        type,
+        amount,
+        transaction_date: date,
+        category,
+        subcategory,
+        payment_method: paymentMethod,
+        notes,
+      };
+
+      if (id) {
+        await api(`/api/expenses/${id}`, { method: 'PUT', body: payload });
+        toast('Transaction updated!');
+      } else {
+        await api('/api/expenses', { method: 'POST', body: payload });
+        toast('Transaction added!');
+      }
+      $('#expense-entry-modal')?.close();
+      await loadExpensesModule();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Failed to save transaction.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // CSV Import Modal
+  $('#open-expense-csv-btn')?.addEventListener('click', () => {
+    $('#expense-csv-form')?.reset();
+    if ($('#expense-csv-report')) $('#expense-csv-report').hidden = true;
+    if ($('#expense-csv-error')) $('#expense-csv-error').textContent = '';
+    $('#expense-csv-modal')?.showModal();
+  });
+  $('#expense-csv-close')?.addEventListener('click', () => $('#expense-csv-modal')?.close());
+
+  $('#expense-csv-file-input')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const txtArea = $('#expense-csv-textarea');
+      if (txtArea) txtArea.value = evt.target.result;
+      toast(`Loaded ${file.name}`);
+    };
+    reader.readAsText(file);
+  });
+
+  $('#expense-csv-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const csv = ($('#expense-csv-textarea')?.value || '').trim();
+    const errEl = $('#expense-csv-error');
+    const repEl = $('#expense-csv-report');
+    const submitBtn = $('#expense-csv-submit');
+    if (errEl) errEl.textContent = '';
+    if (repEl) repEl.hidden = true;
+
+    if (!csv) {
+      if (errEl) errEl.textContent = 'Please select a CSV file or paste CSV text.';
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await api('/api/expenses/import-csv', { method: 'POST', body: { csv } });
+      if (repEl) {
+        repEl.hidden = false;
+        repEl.innerHTML = `<strong>Import Complete!</strong><br>Successfully imported <b>${res.imported_count}</b> transactions (${res.duplicate_count} potential duplicates detected).`;
+      }
+      toast(`Imported ${res.imported_count} transactions from CSV!`);
+      await loadExpensesModule();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'CSV import failed.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Budget Modal
+  const openBudgetDialog = () => {
+    $('#budget-form')?.reset();
+    if ($('#budget-form-error')) $('#budget-form-error').textContent = '';
+    $('#budget-modal')?.showModal();
+  };
+  $('#open-budget-modal-btn')?.addEventListener('click', openBudgetDialog);
+  $('#add-budget-quick-btn')?.addEventListener('click', openBudgetDialog);
+  $('#budget-modal-close')?.addEventListener('click', () => $('#budget-modal')?.close());
+
+  $('#budget-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const category = ($('#budget-category-select')?.value || '').trim();
+    const limit = parseFloat($('#budget-limit-input')?.value) || 0;
+    const month = $('#expense-filter-month')?.value || currentMonth();
+    const errEl = $('#budget-form-error');
+    const submitBtn = $('#budget-form-submit');
+    if (errEl) errEl.textContent = '';
+
+    if (!category || limit <= 0) {
+      if (errEl) errEl.textContent = 'Please select a category and enter a valid monthly limit.';
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await api('/api/budgets', { method: 'POST', body: { category, monthly_limit: limit, month } });
+      $('#budget-modal')?.close();
+      toast(`Budget set for ${category}: ${money(limit)}`);
+      await loadExpenseReport(month);
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not save budget.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Filters & Search
+  $('#expense-filter-month')?.addEventListener('change', () => loadExpensesModule());
+  $('#expense-type-filter')?.addEventListener('change', () => loadExpensesList());
+  $('#expense-category-filter')?.addEventListener('change', () => loadExpensesList());
+  $('#expense-source-filter')?.addEventListener('change', () => loadExpensesList());
+  $('#expense-search')?.addEventListener('input', () => {
+    window.clearTimeout(state.expenseSearchTimer);
+    state.expenseSearchTimer = window.setTimeout(() => loadExpensesList(), 300);
+  });
+
+  // Edit and Delete Delegations
+  $('#expenses-table-body')?.addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('.expense-edit-btn');
+    if (editBtn) {
+      const id = editBtn.dataset.id;
+      const tx = state.expenses.find((x) => String(x.id) === String(id));
+      if (!tx) return;
+      resetExpenseForm();
+      if ($('#expense-edit-id')) $('#expense-edit-id').value = tx.id;
+      if ($('#expense-modal-title')) $('#expense-modal-title').innerHTML = '<i class="fa-solid fa-pencil"></i> Edit Transaction';
+      if ($('#expense-amount-input')) $('#expense-amount-input').value = tx.amount;
+      if ($('#expense-date-input')) $('#expense-date-input').value = tx.transaction_date;
+      if ($('#expense-category-select')) $('#expense-category-select').value = tx.category;
+      if ($('#expense-subcategory-input')) $('#expense-subcategory-input').value = tx.subcategory || '';
+      if ($('#expense-payment-method')) $('#expense-payment-method').value = tx.payment_method;
+      if ($('#expense-notes-input')) $('#expense-notes-input').value = tx.notes || '';
+      if (tx.type === 'income') {
+        $('#tx-type-income-btn')?.click();
+      } else {
+        $('#tx-type-expense-btn')?.click();
+      }
+      $('#expense-entry-modal')?.showModal();
+      return;
+    }
+
+    const delBtn = e.target.closest('.expense-delete-btn');
+    if (delBtn) {
+      const id = delBtn.dataset.id;
+      if (!window.confirm('Delete this transaction? This cannot be undone.')) return;
+      try {
+        await api(`/api/expenses/${id}`, { method: 'DELETE', body: {} });
+        toast('Transaction deleted.');
+        await loadExpensesModule();
+      } catch (err) {
+        handleError(err);
+      }
     }
   });
 

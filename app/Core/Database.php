@@ -82,6 +82,29 @@ final class Database
         if (getenv('APP_ENV')) {
             $settings['app']['environment'] = (string)getenv('APP_ENV');
         }
+        if (getenv('APP_ENCRYPTION_KEY')) {
+            $settings['app']['encryption_key'] = (string)getenv('APP_ENCRYPTION_KEY');
+        }
+        if (getenv('OPENAI_API_KEY')) {
+            $settings['openai']['api_key'] = (string)getenv('OPENAI_API_KEY');
+            $settings['openai']['enabled'] = true;
+        }
+        if (getenv('GEMINI_API_KEY')) {
+            $settings['gemini']['api_key'] = (string)getenv('GEMINI_API_KEY');
+            $settings['gemini']['enabled'] = true;
+        }
+        if (getenv('ZERODHA_API_KEY')) {
+            $settings['zerodha']['api_key'] = (string)getenv('ZERODHA_API_KEY');
+        }
+        if (getenv('ZERODHA_API_SECRET')) {
+            $settings['zerodha']['api_secret'] = (string)getenv('ZERODHA_API_SECRET');
+        }
+        if (getenv('DHAN_CLIENT_ID')) {
+            $settings['dhan']['client_id'] = (string)getenv('DHAN_CLIENT_ID');
+        }
+        if (getenv('DHAN_ACCESS_TOKEN')) {
+            $settings['dhan']['access_token'] = (string)getenv('DHAN_ACCESS_TOKEN');
+        }
         return $settings;
     }
 }

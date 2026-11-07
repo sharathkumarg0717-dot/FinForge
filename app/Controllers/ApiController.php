@@ -9,7 +9,9 @@ use FinSync\Core\RateLimiter;
 use FinSync\Core\Security;
 use FinSync\Models\FinanceRepository;
 use FinSync\Services\AdvisorService;
+use FinSync\Services\BrokerService;
 use FinSync\Services\ConsentService;
+use FinSync\Services\ExpenseService;
 use PDO;
 use Throwable;
 
@@ -18,6 +20,8 @@ final class ApiController
     private PDO $db;
     private ConsentService $consent;
     private FinanceRepository $finance;
+    private ExpenseService $expenses;
+    private BrokerService $brokers;
 
     public function __construct()
     {
@@ -25,20 +29,26 @@ final class ApiController
 
     public function dispatch(string $path, string $method): void
     {
+        $this->db = Database::connection();
+        FinanceRepository::ensureSchema($this->db);
+        $this->consent = new ConsentService($this->db);
+        $this->finance = new FinanceRepository($this->db);
+        $this->expenses = new ExpenseService();
+        $this->brokers = new BrokerService($this->db);
+
         if ($path === '/api/session' && $method === 'GET') {
             $id = Security::currentUserId();
             $user = null;
             $granted = false;
             if ($id !== null) {
                 try {
-                    $db = Database::connection();
-                    $statement = $db->prepare('SELECT id, name, email, avatar_url, auth_provider FROM users WHERE id = :id AND status = "active" LIMIT 1');
+                    $statement = $this->db->prepare('SELECT id, name, email, avatar_url, auth_provider FROM users WHERE id = :id AND status = "active" LIMIT 1');
                     $statement->execute(['id' => $id]);
                     $user = $statement->fetch() ?: null;
                     if ($user === null) {
                         unset($_SESSION['user_id']);
                     } else {
-                        $granted = (new ConsentService($db))->granted($id);
+                        $granted = $this->consent->granted($id);
                     }
                 } catch (Throwable $e) {
                     error_log('Session user lookup notice: ' . $e->getMessage());
@@ -58,10 +68,6 @@ final class ApiController
                 'csrf_token' => Security::csrfToken(),
             ]]);
         }
-
-        $this->db = Database::connection();
-        $this->consent = new ConsentService($this->db);
-        $this->finance = new FinanceRepository($this->db);
 
         if ($path === '/api/health' && $method === 'GET') {
             $this->db->query('SELECT 1');
@@ -85,6 +91,18 @@ final class ApiController
             $auth->google(Http::body());
         }
 
+        // --- Phase 1: Password reset routes (no auth required) ---
+        if ($path === '/api/forgot-password' && $method === 'POST') {
+            Http::requireJson();
+            Security::requireCsrf();
+            $auth->forgotPassword(Http::body());
+        }
+        if ($path === '/api/reset-password' && $method === 'POST') {
+            Http::requireJson();
+            Security::requireCsrf();
+            $auth->resetPassword(Http::body());
+        }
+
         $userId = Security::requireUser();
         if ($method !== 'GET') {
             Http::requireJson();
@@ -93,6 +111,10 @@ final class ApiController
 
         if ($path === '/api/logout' && $method === 'POST') {
             $auth->logout($userId);
+        }
+        // Phase 1: Logout all devices
+        if ($path === '/api/logout-all' && $method === 'POST') {
+            $auth->logoutAllDevices($userId);
         }
         if ($path === '/api/consent' && $method === 'GET') {
             Http::json(['data' => ['financial_data' => ['granted' => $this->consent->granted($userId), 'description' => 'Access to this account’s synthetic family-finance records within FinSync.']]]);
@@ -140,6 +162,82 @@ final class ApiController
             $this->audit($userId, 'personal_finance.deleted', 'personal_finance_record', $id);
             Http::json(['data' => ['deleted' => true]]);
         }
+
+        // --- Phase 2: Expense, Income & Budget Management ---
+        if ($path === '/api/expenses' && $method === 'GET') {
+            Http::json(['data' => $this->expenses->listExpenses($userId, $_GET)]);
+        }
+        if ($path === '/api/expenses' && $method === 'POST') {
+            try {
+                $expense = $this->expenses->createExpense($userId, Http::body());
+                $this->audit($userId, 'expense.created', 'expense', $expense['id']);
+                Http::json(['data' => $expense], 201);
+            } catch (\InvalidArgumentException $e) {
+                Http::error($e->getMessage(), 'invalid_input', 400);
+            }
+        }
+        if (preg_match('#^/api/expenses/([1-9]\d*)$#', $path, $match) && $method === 'GET') {
+            $expense = $this->expenses->getExpense($userId, (int)$match[1]);
+            if (!$expense) {
+                Http::error('Transaction record not found.', 'not_found', 404);
+            }
+            Http::json(['data' => $expense]);
+        }
+        if (preg_match('#^/api/expenses/([1-9]\d*)$#', $path, $match) && $method === 'PUT') {
+            try {
+                $expense = $this->expenses->updateExpense($userId, (int)$match[1], Http::body());
+                $this->audit($userId, 'expense.updated', 'expense', (int)$match[1]);
+                Http::json(['data' => $expense]);
+            } catch (\InvalidArgumentException $e) {
+                Http::error($e->getMessage(), 'invalid_input', 400);
+            } catch (\RuntimeException $e) {
+                Http::error($e->getMessage(), 'not_found', 404);
+            }
+        }
+        if (preg_match('#^/api/expenses/([1-9]\d*)$#', $path, $match) && $method === 'DELETE') {
+            if (!$this->expenses->deleteExpense($userId, (int)$match[1])) {
+                Http::error('Transaction record not found.', 'not_found', 404);
+            }
+            $this->audit($userId, 'expense.deleted', 'expense', (int)$match[1]);
+            Http::json(['data' => ['deleted' => true]]);
+        }
+        if ($path === '/api/expenses/report' && $method === 'GET') {
+            $month = (string)($_GET['month'] ?? date('Y-m'));
+            Http::json(['data' => $this->expenses->getMonthlyReport($userId, $month)]);
+        }
+        if ($path === '/api/expenses/import-csv' && $method === 'POST') {
+            $csv = (string)(Http::body()['csv'] ?? '');
+            if (trim($csv) === '') {
+                Http::error('Please provide CSV data to import.');
+            }
+            try {
+                $result = $this->expenses->importCsv($userId, $csv);
+                $this->audit($userId, 'expense.csv_imported', 'expense', null);
+                Http::json(['data' => $result]);
+            } catch (\InvalidArgumentException $e) {
+                Http::error($e->getMessage(), 'invalid_csv', 400);
+            }
+        }
+        if ($path === '/api/budgets' && $method === 'GET') {
+            $month = (string)($_GET['month'] ?? date('Y-m'));
+            Http::json(['data' => $this->expenses->getBudgetReport($userId, $month)]);
+        }
+        if ($path === '/api/budgets' && $method === 'POST') {
+            $body = Http::body();
+            $category = (string)($body['category'] ?? '');
+            $limit = (float)($body['monthly_limit'] ?? 0);
+            $month = (string)($body['month'] ?? date('Y-m'));
+            try {
+                $report = $this->expenses->saveBudget($userId, $category, $limit, $month);
+                $this->audit($userId, 'budget.saved', 'budget', null);
+                Http::json(['data' => $report]);
+            } catch (\InvalidArgumentException $e) {
+                Http::error($e->getMessage(), 'invalid_input', 400);
+            }
+        }
+        if ($path === '/api/expense-categories' && $method === 'GET') {
+            Http::json(['data' => $this->expenses->listCategories($userId)]);
+        }
         $this->requireConsent($userId);
         if ($path === '/api/dashboard' && $method === 'GET') {
             Http::json(['data' => $this->finance->dashboard($userId)]);
@@ -170,6 +268,45 @@ final class ApiController
         }
         if ($path === '/api/investments' && $method === 'GET') {
             Http::json(['data' => $this->finance->holdings($userId)]);
+        }
+
+        // Unified Broker Integrations (Phase 3: Zerodha, Dhan, Groww)
+        if ($path === '/api/brokers' && $method === 'GET') {
+            Http::json(['data' => $this->brokers->getAllBrokers($userId)]);
+        }
+        if (preg_match('#^/api/brokers/([a-z0-9_-]+)/connect$#', $path, $m) && $method === 'POST') {
+            Security::requireCsrf();
+            try {
+                $res = $this->brokers->connect($userId, $m[1], Http::body());
+                $this->audit($userId, 'broker.connected', 'broker', null, ['broker' => $m[1]]);
+                Http::json(['data' => $res]);
+            } catch (\Throwable $e) {
+                Http::error($e->getMessage(), 'broker_error', 400);
+            }
+        }
+        if (preg_match('#^/api/brokers/([a-z0-9_-]+)/disconnect$#', $path, $m) && $method === 'POST') {
+            Security::requireCsrf();
+            $this->brokers->disconnect($userId, $m[1]);
+            $this->audit($userId, 'broker.disconnected', 'broker', null, ['broker' => $m[1]]);
+            Http::json(['data' => ['success' => true, 'broker' => $m[1]]]);
+        }
+        if (preg_match('#^/api/brokers/([a-z0-9_-]+)/sync$#', $path, $m) && $method === 'POST') {
+            Security::requireCsrf();
+            try {
+                $res = $this->brokers->sync($userId, $m[1]);
+                $this->audit($userId, 'broker.synced', 'broker', null, ['broker' => $m[1]]);
+                Http::json(['data' => $res]);
+            } catch (\Throwable $e) {
+                Http::error($e->getMessage(), 'sync_failed', 400);
+            }
+        }
+        if ($path === '/api/brokers/sync-all' && $method === 'POST') {
+            Security::requireCsrf();
+            Http::json(['data' => $this->brokers->syncAll($userId)]);
+        }
+        if ($path === '/api/brokers/logs' && $method === 'GET') {
+            $code = trim((string)($_GET['broker'] ?? ''));
+            Http::json(['data' => $this->brokers->getSyncLogs($userId, $code ?: null)]);
         }
         if ($path === '/api/zerodha' && $method === 'GET') {
             Http::json(['data' => $this->finance->zerodhaAccount($userId)]);
@@ -517,9 +654,24 @@ final class ApiController
 
     private function audit(int $userId, string $action, string $type, ?int $resourceId): void
     {
-        $statement = $this->db->prepare(
-            'INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id) VALUES (:actor, :action, :type, :resource)'
-        );
-        $statement->execute(['actor' => $userId, 'action' => $action, 'type' => $type, 'resource' => $resourceId]);
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        try {
+            $statement = $this->db->prepare(
+                'INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, ip_address)
+                 VALUES (:actor, :action, :type, :resource, :ip)'
+            );
+            $statement->execute(['actor' => $userId, 'action' => $action, 'type' => $type, 'resource' => $resourceId, 'ip' => $ip]);
+        } catch (\Throwable $e) {
+            // Fallback if ip_address column not yet migrated
+            try {
+                $statement = $this->db->prepare(
+                    'INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id)
+                     VALUES (:actor, :action, :type, :resource)'
+                );
+                $statement->execute(['actor' => $userId, 'action' => $action, 'type' => $type, 'resource' => $resourceId]);
+            } catch (\Throwable $e2) {
+                error_log('Audit log error: ' . $e2->getMessage());
+            }
+        }
     }
 }

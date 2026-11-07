@@ -1,17 +1,61 @@
-# FinSync Root .htaccess for Shared Hosts (InfinityFree / cPanel)
+# FinForge Pro — Root .htaccess (Phase 1: Security Hardening)
+# Works on InfinityFree, cPanel, and standard Apache shared hosting.
+
+# -----------------------------------------------------------------
+# Security: Block access to sensitive directories and files
+# -----------------------------------------------------------------
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Prevent direct access to sensitive folders
+    # Block direct access to sensitive server-side folders
     RewriteRule ^app/ - [F,L]
     RewriteRule ^database/ - [F,L]
+    RewriteRule ^storage/ - [F,L]
+    RewriteRule ^deploy/ - [F,L]
     RewriteRule ^config\.local\.php$ - [F,L]
+    RewriteRule ^config\.local\.example\.php$ - [F,L]
+    RewriteRule ^\.env$ - [F,L]
+    RewriteRule ^\.git/ - [F,L]
+    RewriteRule ^composer\.(json|lock)$ - [F,L]
 
-    # Allow direct access to test_db.php for diagnostics
+    # Allow direct access to diagnostic tools
     RewriteRule ^test_db\.php$ public/test_db.php [L]
+    RewriteRule ^kite_token\.php$ public/kite_token.php [L]
 
     # Route all other requests to public/
-    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteCond %{REQUEST_URI} !public/
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
+
+# -----------------------------------------------------------------
+# Security Headers (Phase 1)
+# -----------------------------------------------------------------
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Prevent clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Force HTTPS when served over HTTPS (safe to include on HTTP too)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # Minimal referrer leakage
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Restrict browser features
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+
+    # XSS Protection (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Remove server fingerprinting headers
+    Header unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# -----------------------------------------------------------------
+# Disable directory listing
+# -----------------------------------------------------------------
+Options -Indexes
 

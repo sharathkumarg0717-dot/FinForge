@@ -50,6 +50,182 @@ final class FinanceRepository
                 $db->exec("ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) NOT NULL DEFAULT 'local' AFTER avatar_url");
             }
 
+            // 4. Ensure users table has failed_login_count & locked_until (Phase 1)
+            $colsFailed = $db->query("SHOW COLUMNS FROM users LIKE 'failed_login_count'")->fetchAll();
+            if (empty($colsFailed)) {
+                $db->exec("ALTER TABLE users ADD COLUMN failed_login_count TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER role");
+            }
+            $colsLocked = $db->query("SHOW COLUMNS FROM users LIKE 'locked_until'")->fetchAll();
+            if (empty($colsLocked)) {
+                $db->exec("ALTER TABLE users ADD COLUMN locked_until DATETIME NULL DEFAULT NULL AFTER failed_login_count");
+            }
+
+            // 5. Ensure password_reset_tokens table exists (Phase 1)
+            $db->exec("CREATE TABLE IF NOT EXISTS password_reset_tokens (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              token_hash VARCHAR(64) NOT NULL UNIQUE,
+              expires_at DATETIME NOT NULL,
+              used_at DATETIME NULL,
+              ip_address VARCHAR(45) NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT fk_prt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              INDEX idx_prt_user (user_id),
+              INDEX idx_prt_expires (expires_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 6. Ensure user_sessions table exists (Phase 1)
+            $db->exec("CREATE TABLE IF NOT EXISTS user_sessions (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              session_token_hash VARCHAR(64) NOT NULL UNIQUE,
+              ip_address VARCHAR(45) NULL,
+              user_agent VARCHAR(300) NULL,
+              last_active_at DATETIME NOT NULL,
+              expires_at DATETIME NOT NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              INDEX idx_session_user (user_id, expires_at),
+              INDEX idx_session_token (session_token_hash)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 7. Ensure audit_logs has ip_address (Phase 1)
+            $colsAuditIp = $db->query("SHOW COLUMNS FROM audit_logs LIKE 'ip_address'")->fetchAll();
+            if (empty($colsAuditIp)) {
+                $db->exec("ALTER TABLE audit_logs ADD COLUMN ip_address VARCHAR(45) NULL AFTER metadata");
+            }
+
+            // 8. Ensure expense_categories table exists (Phase 2)
+            $db->exec("CREATE TABLE IF NOT EXISTS expense_categories (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NULL,
+              name VARCHAR(60) NOT NULL,
+              type ENUM('expense', 'income') NOT NULL DEFAULT 'expense',
+              icon VARCHAR(50) NOT NULL DEFAULT 'fa-tags',
+              color VARCHAR(20) NOT NULL DEFAULT '#6366f1',
+              is_default TINYINT(1) NOT NULL DEFAULT 0,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              INDEX idx_cat_user (user_id),
+              INDEX idx_cat_type (type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // Seed default expense categories if empty
+            $catCount = (int)$db->query("SELECT COUNT(*) FROM expense_categories WHERE user_id IS NULL")->fetchColumn();
+            if ($catCount === 0) {
+                $db->exec("INSERT IGNORE INTO expense_categories (user_id, name, type, icon, color, is_default) VALUES
+                  (NULL, 'Salary', 'income', 'fa-money-bill-wave', '#10b981', 1),
+                  (NULL, 'Business income', 'income', 'fa-briefcase', '#059669', 1),
+                  (NULL, 'Investments', 'income', 'fa-chart-line', '#0d9488', 1),
+                  (NULL, 'Other income', 'income', 'fa-wallet', '#14b8a6', 1),
+                  (NULL, 'Food', 'expense', 'fa-utensils', '#f97316', 1),
+                  (NULL, 'Groceries', 'expense', 'fa-basket-shopping', '#ea580c', 1),
+                  (NULL, 'Shopping', 'expense', 'fa-bag-shopping', '#ec4899', 1),
+                  (NULL, 'Transport', 'expense', 'fa-bus', '#3b82f6', 1),
+                  (NULL, 'Fuel', 'expense', 'fa-gas-pump', '#0284c7', 1),
+                  (NULL, 'Rent', 'expense', 'fa-house', '#8b5cf6', 1),
+                  (NULL, 'Utilities', 'expense', 'fa-bolt', '#eab308', 1),
+                  (NULL, 'Healthcare', 'expense', 'fa-heart-pulse', '#ef4444', 1),
+                  (NULL, 'Education', 'expense', 'fa-graduation-cap', '#6366f1', 1),
+                  (NULL, 'Entertainment', 'expense', 'fa-film', '#a855f7', 1),
+                  (NULL, 'Travel', 'expense', 'fa-plane', '#06b6d4', 1),
+                  (NULL, 'Loan payments', 'expense', 'fa-building-columns', '#dc2626', 1),
+                  (NULL, 'Insurance', 'expense', 'fa-shield-halved', '#4f46e5', 1),
+                  (NULL, 'Investments', 'expense', 'fa-piggy-bank', '#10b981', 1)");
+            }
+
+            // 9. Ensure expenses table exists (Phase 2)
+            $db->exec("CREATE TABLE IF NOT EXISTS expenses (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              type ENUM('expense', 'income') NOT NULL DEFAULT 'expense',
+              amount DECIMAL(12,2) NOT NULL,
+              category VARCHAR(60) NOT NULL,
+              subcategory VARCHAR(60) NULL,
+              payment_method VARCHAR(40) NOT NULL DEFAULT 'cash',
+              transaction_date DATE NOT NULL,
+              notes TEXT NULL,
+              receipt_filename VARCHAR(255) NULL,
+              source ENUM('manual', 'csv', 'bank') NOT NULL DEFAULT 'manual',
+              is_duplicate TINYINT(1) NOT NULL DEFAULT 0,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              CONSTRAINT fk_expenses_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              INDEX idx_expenses_user_date (user_id, transaction_date),
+              INDEX idx_expenses_user_cat (user_id, category),
+              INDEX idx_expenses_user_type (user_id, type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 10. Ensure budgets table exists (Phase 2)
+            $db->exec("CREATE TABLE IF NOT EXISTS budgets (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              category VARCHAR(60) NOT NULL,
+              monthly_limit DECIMAL(12,2) NOT NULL,
+              month VARCHAR(7) NOT NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              CONSTRAINT fk_budgets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              UNIQUE KEY uq_user_cat_month (user_id, category, month),
+              INDEX idx_budgets_user_month (user_id, month)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 11. Ensure recurring_transactions table exists (Phase 2)
+            $db->exec("CREATE TABLE IF NOT EXISTS recurring_transactions (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              title VARCHAR(120) NOT NULL,
+              type ENUM('expense', 'income') NOT NULL DEFAULT 'expense',
+              amount DECIMAL(12,2) NOT NULL,
+              category VARCHAR(60) NOT NULL,
+              frequency ENUM('weekly', 'monthly', 'quarterly', 'yearly') NOT NULL DEFAULT 'monthly',
+              day_of_month TINYINT UNSIGNED NOT NULL DEFAULT 1,
+              next_due_date DATE NOT NULL,
+              is_active TINYINT(1) NOT NULL DEFAULT 1,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT fk_recurring_tx_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              INDEX idx_recurring_user (user_id, is_active)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 12. Ensure broker_connections table exists (Phase 3)
+            $db->exec("CREATE TABLE IF NOT EXISTS broker_connections (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              broker_code VARCHAR(40) NOT NULL,
+              broker_name VARCHAR(80) NOT NULL,
+              client_id VARCHAR(80) NULL,
+              account_id BIGINT UNSIGNED NULL,
+              api_key_enc TEXT NULL,
+              access_token_enc TEXT NULL,
+              token_expires_at DATETIME NULL,
+              status ENUM('disconnected', 'connected', 'token_expired', 'error') NOT NULL DEFAULT 'disconnected',
+              last_sync_at DATETIME NULL,
+              sync_status ENUM('idle', 'syncing', 'success', 'failed') NOT NULL DEFAULT 'idle',
+              error_message VARCHAR(500) NULL,
+              is_live TINYINT(1) NOT NULL DEFAULT 1,
+              metadata JSON NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              CONSTRAINT fk_broker_conn_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              UNIQUE KEY uq_user_broker (user_id, broker_code),
+              INDEX idx_broker_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 13. Ensure broker_sync_logs table exists (Phase 3)
+            $db->exec("CREATE TABLE IF NOT EXISTS broker_sync_logs (
+              id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              user_id BIGINT UNSIGNED NOT NULL,
+              broker_connection_id BIGINT UNSIGNED NULL,
+              broker_code VARCHAR(40) NOT NULL,
+              sync_type ENUM('api', 'csv', 'manual') NOT NULL DEFAULT 'api',
+              holdings_count INT UNSIGNED NOT NULL DEFAULT 0,
+              total_value DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+              status ENUM('success', 'failed') NOT NULL,
+              error_message VARCHAR(500) NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT fk_broker_sync_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+              INDEX idx_broker_sync_user (user_id, broker_code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
             self::$schemaEnsured = true;
         } catch (\Throwable $e) {
             error_log('Auto schema migration notice: ' . $e->getMessage());
@@ -393,7 +569,7 @@ final class FinanceRepository
 
         $statement = $this->db->prepare(
             'INSERT INTO financial_accounts (user_id, family_member_id, provider_key, institution, account_type, masked_number, balance, currency, last_synced_at, is_demo) '
-            . 'VALUES (:user_id, :member_id, "mock_bank", :institution, :account_type, :masked_number, :balance, "INR", NOW(), 1)'
+            . 'VALUES (:user_id, :member_id, "manual", :institution, :account_type, :masked_number, :balance, "INR", NOW(), 0)'
         );
         $statement->execute([
             'user_id' => $userId,
@@ -1190,23 +1366,49 @@ final class FinanceRepository
         );
         $summary->execute(['user_id' => $userId]);
         $cashFlow = $summary->fetch();
+
+        // Dynamically include records from the new expenses table (Phase 2)
+        $expSummary = $this->db->prepare(
+            'SELECT type, SUM(amount) AS total
+             FROM expenses
+             WHERE user_id = :user_id AND DATE_FORMAT(transaction_date, "%Y-%m") = DATE_FORMAT(CURRENT_DATE, "%Y-%m")
+             GROUP BY type'
+        );
+        $expSummary->execute(['user_id' => $userId]);
+        $expTotals = $expSummary->fetchAll(PDO::FETCH_KEY_PAIR);
+        $expIncome = (float)($expTotals['income'] ?? 0);
+        $expExpenses = (float)($expTotals['expense'] ?? 0);
+
+        $totalIncome = (float)$cashFlow['income'] + $expIncome;
+        $totalExpenses = (float)$cashFlow['expenses'] + $expExpenses;
+        $totalNet = $totalIncome - $totalExpenses;
         $netWorth = $assets - $liabilities;
+
+        $savingsRate = $totalIncome > 0 ? round(($totalNet / $totalIncome) * 100, 1) : 0;
+        $healthScore = min(100, max(25, (int)round(60 + ($totalNet >= 0 ? 20 : -25) + ($savingsRate >= 20 ? 15 : ($savingsRate > 0 ? 5 : -10)))));
+
         return [
             'has_personal_records' => false,
             'net_worth' => round($netWorth, 2),
             'assets' => round($assets, 2),
             'liabilities' => round($liabilities, 2),
             'investment_value' => round(array_sum(array_map(static fn(array $item): float => (float)$item['market_value'], $holdings)), 2),
-            'monthly_income' => round((float)$cashFlow['income'], 2),
-            'monthly_expenses' => round((float)$cashFlow['expenses'], 2),
-            'monthly_net' => round((float)$cashFlow['income'] - (float)$cashFlow['expenses'], 2),
+            'monthly_income' => round($totalIncome, 2),
+            'monthly_expenses' => round($totalExpenses, 2),
+            'monthly_net' => round($totalNet, 2),
             'account_count' => count($accounts),
             'unread_notifications' => $unreadCount,
             'accounts' => $accounts,
             'transactions' => $transactions,
             'upcoming' => array_slice($recurring, 0, 4),
-            'health_score' => min(100, max(35, (int)round(65 + (($netWorth > 0) ? 12 : -8) + (((float)$cashFlow['income'] > (float)$cashFlow['expenses']) ? 10 : -5)))),
-            'health_explanation' => 'A demo indicator based on synthetic net worth and this month’s recorded cash flow; it is not a credit score or financial advice.',
+            'health_score' => $healthScore,
+            'health_explanation' => sprintf(
+                'Financial wellness calculated dynamically from your recorded cash flow (Income: ₹%s, Expenses: ₹%s, Net: ₹%s, Savings Rate: %s%%).',
+                number_format($totalIncome, 2),
+                number_format($totalExpenses, 2),
+                number_format($totalNet, 2),
+                $savingsRate
+            ),
         ];
     }
 }
