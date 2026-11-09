@@ -860,38 +860,90 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <section class="screen" id="screen-investments" hidden>
           <div class="page-heading">
             <div>
-              <p class="eyebrow">EQUITY, MUTUAL FUNDS &amp; DEMAT <span class="live-dot"></span> LIVE PORTFOLIO</p>
+              <p class="eyebrow">MULTI-BROKER DEMAT &amp; PORTFOLIO <span class="live-dot"></span> LIVE SYNC</p>
               <h1>Investments &amp; Demat</h1>
-              <p class="subtitle">Track your Zerodha Demat account, live stock holdings, mutual funds, and total portfolio performance in Indian Rupees (₹).</p>
+              <p class="subtitle">Real-time portfolio tracking across Zerodha Kite, DhanHQ API, and Groww Demat accounts.</p>
             </div>
             <div class="page-heading-actions">
-              <button class="primary-button zerodha-btn" id="connect-zerodha-btn" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha Demat</button>
+              <button class="primary-button" id="sync-all-brokers-btn" type="button" title="Synchronize holdings across all connected brokers"><i class="fa-solid fa-arrows-rotate"></i> Sync All Brokers</button>
               <button class="outline-button" id="add-holding-btn" type="button"><i class="fa-solid fa-plus"></i> Add Holding</button>
             </div>
           </div>
 
-          <!-- ZERODHA DEMAT ACCOUNT STATUS CARD -->
-          <article class="panel zerodha-card" id="zerodha-banner-panel">
-            <div class="zerodha-card-body">
-              <div class="zerodha-brand-badge">
-                <span class="zerodha-kite-icon">K</span>
-                <div>
-                  <h3 id="zerodha-card-title">Zerodha Demat Account</h3>
-                  <p id="zerodha-card-sub">Not connected yet. Link your Zerodha Kite account to track real equity &amp; ETF holdings.</p>
+          <!-- MULTI-BROKER HUB GRID (ZERODHA, DHAN, GROWW) -->
+          <div class="broker-hub-grid">
+            <!-- 1. ZERODHA KITE CARD -->
+            <article class="panel zerodha-card broker-hub-card" id="zerodha-hub-card">
+              <div>
+                <div class="zerodha-card-body" style="margin-bottom: 12px;">
+                  <div class="zerodha-brand-badge">
+                    <span class="zerodha-kite-icon">K</span>
+                    <div>
+                      <h3 id="zerodha-card-title">Zerodha Kite</h3>
+                      <p id="zerodha-card-sub">CDSL Demat · Live API &amp; CSV</p>
+                    </div>
+                  </div>
+                  <span id="zerodha-status-chip" class="status-chip neutral-chip">Disconnected</span>
+                </div>
+                <div id="zerodha-connected-details" class="zerodha-details-row" hidden>
+                  <div class="zerodha-detail-pill"><span>Client ID:</span> <b id="zerodha-client-display">—</b></div>
+                  <div class="zerodha-detail-pill"><span>Holdings:</span> <b id="zerodha-holdings-count-badge">0</b></div>
+                  <div class="zerodha-detail-pill"><span>Value:</span> <b id="zerodha-card-value">₹0.00</b></div>
                 </div>
               </div>
-              <div class="zerodha-actions-wrap" id="zerodha-actions-container">
-                <button class="primary-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha</button>
+              <div class="zerodha-actions-wrap" id="zerodha-actions-container" style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="primary-button small-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha</button>
               </div>
-            </div>
-            <div id="zerodha-connected-details" class="zerodha-details-row" hidden>
-              <div class="zerodha-detail-pill"><span>Broker:</span> <b>Zerodha Broking Ltd</b></div>
-              <div class="zerodha-detail-pill"><span>Client ID:</span> <b id="zerodha-client-display">—</b></div>
-              <div class="zerodha-detail-pill"><span>Depository:</span> <b>CDSL</b></div>
-              <div class="zerodha-detail-pill"><span>Status:</span> <span class="status-chip success-chip">Active Demat</span></div>
-              <div class="zerodha-detail-pill"><span>Last Synced:</span> <span id="zerodha-synced-at">Just now</span></div>
-            </div>
-          </article>
+            </article>
+
+            <!-- 2. DHANHQ API CARD -->
+            <article class="panel dhan-card broker-hub-card" id="dhan-hub-card">
+              <div>
+                <div class="zerodha-card-body" style="margin-bottom: 12px;">
+                  <div class="zerodha-brand-badge">
+                    <span class="dhan-icon"><i class="fa-solid fa-gem"></i></span>
+                    <div>
+                      <h3 id="dhan-card-title">DhanHQ API (v2)</h3>
+                      <p id="dhan-card-sub">Direct 30-Day Access Token</p>
+                    </div>
+                  </div>
+                  <span id="dhan-status-chip" class="status-chip neutral-chip">Disconnected</span>
+                </div>
+                <div id="dhan-connected-details" class="zerodha-details-row" hidden>
+                  <div class="zerodha-detail-pill"><span>Client ID:</span> <b id="dhan-client-display">—</b></div>
+                  <div class="zerodha-detail-pill"><span>Holdings:</span> <b id="dhan-holdings-count-badge">0</b></div>
+                  <div class="zerodha-detail-pill"><span>Value:</span> <b id="dhan-card-value">₹0.00</b></div>
+                </div>
+              </div>
+              <div class="zerodha-actions-wrap" id="dhan-actions-container" style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="primary-button small-button dhan-btn open-dhan-dialog" type="button"><i class="fa-solid fa-gem"></i> Connect Dhan</button>
+              </div>
+            </article>
+
+            <!-- 3. GROWW DEMAT CARD -->
+            <article class="panel groww-card broker-hub-card" id="groww-hub-card">
+              <div>
+                <div class="zerodha-card-body" style="margin-bottom: 12px;">
+                  <div class="zerodha-brand-badge">
+                    <span class="groww-icon"><i class="fa-solid fa-leaf"></i></span>
+                    <div>
+                      <h3 id="groww-card-title">Groww Demat</h3>
+                      <p id="groww-card-sub">Holdings Statement &amp; CSV Sync</p>
+                    </div>
+                  </div>
+                  <span id="groww-status-chip" class="status-chip neutral-chip">Disconnected</span>
+                </div>
+                <div id="groww-connected-details" class="zerodha-details-row" hidden>
+                  <div class="zerodha-detail-pill"><span>Holdings:</span> <b id="groww-holdings-count-badge">0</b></div>
+                  <div class="zerodha-detail-pill"><span>Value:</span> <b id="groww-card-value">₹0.00</b></div>
+                  <div class="zerodha-detail-pill"><span>Synced:</span> <b id="groww-synced-at">Statement</b></div>
+                </div>
+              </div>
+              <div class="zerodha-actions-wrap" id="groww-actions-container" style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="primary-button small-button groww-btn open-groww-dialog" type="button"><i class="fa-solid fa-file-import"></i> Import Groww CSV</button>
+              </div>
+            </article>
+          </div>
 
           <!-- PORTFOLIO PERFORMANCE METRICS -->
           <div class="stat-grid" style="margin-bottom: 20px;">
@@ -921,11 +973,14 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <span class="stat-label">Zerodha Holdings</span>
-                <span class="stat-icon orange-icon"><i class="fa-solid fa-bolt"></i></span>
+                <span class="stat-label">Broker Breakdown</span>
+                <span class="stat-icon orange-icon"><i class="fa-solid fa-cubes"></i></span>
               </div>
-              <div class="stat-value" id="zerodha-holdings-val">₹0.00</div>
-              <div class="stat-foot"><span class="tiny-note" id="zerodha-holdings-count">0 stocks</span></div>
+              <div class="stat-foot" style="display:flex; flex-direction:column; gap:4px; font-size:12px; margin-top:8px;">
+                <div style="display:flex; justify-content:space-between;"><span>Zerodha:</span> <b id="zerodha-holdings-val">₹0.00</b></div>
+                <div style="display:flex; justify-content:space-between;"><span>Dhan:</span> <b id="dhan-holdings-val">₹0.00</b></div>
+                <div style="display:flex; justify-content:space-between;"><span>Groww:</span> <b id="groww-holdings-val">₹0.00</b></div>
+              </div>
             </article>
           </div>
 
@@ -973,7 +1028,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
         <section class="screen" id="screen-advisor" hidden>
           <div class="page-heading"><div><p class="eyebrow">REAL-TIME FINANCIAL INTELLIGENCE</p><h1>AI insights</h1><p class="subtitle">Ask questions dynamically analyzed against your real financial metrics, portfolio, and expenses.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Real-Time AI</span></div>
-          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL INTELLIGENCE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s AI advisor dynamically analyzes your real income, expenses, category spending, and investment portfolio. It does not make trades or transfer funds.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Grounded in your real data</span><span><i class="fa-solid fa-check"></i> Clear data attribution</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync AI</h2><p>Live AI analysis grounded in your data</p></div><span class="online-indicator"><i></i> READY</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI</b><p>Hi <span id="advisor-name">there</span>! I can analyze your income, expenses, savings rate, portfolio, and category budgets. What would you like to explore?</p></div></div></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your finances</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending and savings rate this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational analysis only—not financial, tax, investment, or legal advice. Verify critical decisions with a qualified professional.</p></article></div>
+          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL INTELLIGENCE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s AI advisor dynamically analyzes your real income, expenses, category spending, and investment portfolio. It does not make trades or transfer funds.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Grounded in your real data</span><span><i class="fa-solid fa-check"></i> Clear data attribution</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync AI</h2><p>Live AI analysis grounded in your data</p></div><span class="online-indicator"><i></i> READY</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI</b><p>Hi <span id="advisor-name">there</span>! I can analyze your income, expenses, savings rate, portfolio, and category budgets. What would you like to explore?</p></div></div></div><div class="advisor-chips" id="advisor-chips"><button type="button" class="advisor-chip" data-query="Summarize my spending and savings rate this month"><i class="fa-solid fa-chart-pie"></i> Spending &amp; Savings</button><button type="button" class="advisor-chip" data-query="How is my multi-broker portfolio in Zerodha, Dhan and Groww doing?"><i class="fa-solid fa-arrow-trend-up"></i> Multi-Broker Portfolio</button><button type="button" class="advisor-chip" data-query="What is my emergency fund runway and debt exposure?"><i class="fa-solid fa-shield-halved"></i> Emergency Fund &amp; Debt</button><button type="button" class="advisor-chip" data-query="Give me a complete financial health audit and recommendations"><i class="fa-solid fa-stethoscope"></i> Full Health Audit</button></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your finances</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending and savings rate this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational analysis only—not financial, tax, investment, or legal advice. Verify critical decisions with a qualified professional.</p></article></div>
         </section>
 
         <section class="screen" id="screen-payments" hidden>
@@ -1224,12 +1279,72 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <label>Demat Account / Broker
           <select name="broker_select" id="holding-broker-select">
             <option value="zerodha">Zerodha Demat (Kite)</option>
-            <option value="other">Default Portfolio</option>
+            <option value="dhan">DhanHQ Demat</option>
+            <option value="groww">Groww Demat</option>
+            <option value="other">Default / Manual Portfolio</option>
           </select>
         </label>
         <p id="add-holding-error" class="form-message error-text" role="status" aria-live="polite"></p>
         <footer>
           <button type="submit" class="primary-button full-button"><i class="fa-solid fa-plus"></i> Add to Portfolio</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- DHANHQ MODAL -->
+  <dialog id="dhan-modal" class="family-account-modal">
+    <article>
+      <header>
+        <button aria-label="Close" rel="prev" id="dhan-modal-close"></button>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="dhan-icon" style="width:36px; height:36px; font-size:16px;"><i class="fa-solid fa-gem"></i></span>
+          <h2 style="margin:0;">Connect DhanHQ Demat</h2>
+        </div>
+      </header>
+      <form id="dhan-connect-form">
+        <p class="modal-sub">Link your Dhan investment account using official DhanHQ v2 API credentials. Tokens are encrypted server-side with AES-256-GCM.</p>
+        <label>Dhan Client ID
+          <input type="text" name="client_id" id="dhan-client-id-input" placeholder="e.g. 1000123456" required>
+        </label>
+        <label>30-Day Access Token
+          <input type="password" name="access_token" id="dhan-access-token-input" placeholder="Paste your DhanHQ Access Token" required>
+        </label>
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; margin:10px 0; font-size:12px; color:#1e40af;">
+          <i class="fa-solid fa-circle-info"></i> How to get your token: Log into <a href="https://web.dhan.co" target="_blank" rel="noopener" style="color:#1d4ed8; text-decoration:underline; font-weight:600;">web.dhan.co</a> &rarr; Profile &rarr; DhanHQ APIs &rarr; Generate Access Token (valid for 30 days).
+        </div>
+        <p id="dhan-modal-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="dhan-modal-submit" class="primary-button full-button dhan-btn"><i class="fa-solid fa-gem"></i> Verify &amp; Connect Dhan</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- GROWW CSV IMPORT MODAL -->
+  <dialog id="groww-modal" class="family-account-modal">
+    <article style="max-width: 600px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="groww-modal-close"></button>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="groww-icon" style="width:36px; height:36px; font-size:16px;"><i class="fa-solid fa-leaf"></i></span>
+          <h2 style="margin:0;">Import Groww Demat Statement</h2>
+        </div>
+      </header>
+      <form id="groww-import-form">
+        <p class="modal-sub">Groww does not offer a public retail trading API. Upload or paste your official Groww Holdings CSV report to track all stocks &amp; mutual funds securely.</p>
+        <div class="file-drop-area" id="groww-file-drop" style="margin-bottom:12px; padding:20px; border:2px dashed #00d09c; border-radius:10px; text-align:center; cursor:pointer;">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:26px; color:#00d09c; margin-bottom:8px; display:block;"></i>
+          <b>Choose Groww CSV File</b><br>
+          <span style="font-size:11px; color:#64748b;">or drag &amp; drop here (Reports &rarr; Holdings on groww.in)</span>
+          <input type="file" id="groww-csv-file" accept=".csv" style="display:none;">
+        </div>
+        <label>Or Paste CSV Contents
+          <textarea name="csv_content" id="groww-csv-text" rows="5" placeholder="Stock Name, Quantity, Buy Price, Current Price (or standard Groww CSV columns)" style="font-family:monospace; font-size:11.5px;"></textarea>
+        </label>
+        <p id="groww-modal-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="groww-modal-submit" class="primary-button full-button groww-btn"><i class="fa-solid fa-file-import"></i> Import Groww Holdings</button>
         </footer>
       </form>
     </article>

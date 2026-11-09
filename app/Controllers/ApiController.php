@@ -238,14 +238,15 @@ final class ApiController
         if ($path === '/api/expense-categories' && $method === 'GET') {
             Http::json(['data' => $this->expenses->listCategories($userId)]);
         }
-        $this->requireConsent($userId);
         if ($path === '/api/dashboard' && $method === 'GET') {
             Http::json(['data' => $this->finance->dashboard($userId)]);
         }
         if ($path === '/api/accounts' && $method === 'GET') {
+            $this->requireConsent($userId);
             Http::json(['data' => $this->finance->accountList($userId)]);
         }
         if ($path === '/api/accounts' && $method === 'POST') {
+            $this->requireConsent($userId);
             $body = Http::body();
             $memberId = (int)($body['family_member_id'] ?? 0);
             if ($memberId <= 0) {
@@ -474,14 +475,16 @@ final class ApiController
             Http::json(['data' => ['read' => true]]);
         }
         if ($path === '/api/payments' && $method === 'GET') {
+            $this->requireConsent($userId);
             Http::json(['data' => $this->finance->payments($userId)]);
         }
         if ($path === '/api/payments' && $method === 'POST') {
+            $this->requireConsent($userId);
             $this->createSimulatedPayment($userId, Http::body());
         }
         if ($path === '/api/advisor' && $method === 'POST') {
-            if (!RateLimiter::allow('advisor', 20, 3600)) {
-                Http::error('Advisor demo limit reached. Try again later.', 'rate_limited', 429);
+            if (!RateLimiter::allow('advisor', 30, 3600)) {
+                Http::error('Advisor request limit reached. Please wait a little.', 'rate_limited', 429);
             }
             $body = Http::body();
             $question = trim((string)($body['question'] ?? ''));
@@ -489,8 +492,36 @@ final class ApiController
             if ($questionLength === false || $questionLength < 3 || $questionLength > 500) {
                 Http::error('Enter a question between 3 and 500 characters.');
             }
-            $result = (new AdvisorService())->respond($question, $this->finance->dashboard($userId));
-            $this->audit($userId, 'advisor.fallback_used', 'advisor', null);
+
+            // Gather rich financial context from MySQL
+            $pfStmt = $this->db->prepare('SELECT * FROM personal_finance_records WHERE user_id = :user_id ORDER BY record_month DESC, id DESC LIMIT 1');
+            $pfStmt->execute(['user_id' => $userId]);
+            $pfRecord = $pfStmt->fetch() ?: [];
+
+            $currentMonth = date('Y-m');
+            $catStmt = $this->db->prepare('SELECT category, SUM(amount) as total, COUNT(*) as tx_count FROM expenses WHERE user_id = :user_id AND type = "expense" AND transaction_date LIKE :prefix GROUP BY category ORDER BY total DESC');
+            $catStmt->execute(['user_id' => $userId, 'prefix' => $currentMonth . '%']);
+            $categoryExpenses = $catStmt->fetchAll();
+
+            $budgetStmt = $this->db->prepare('SELECT category, monthly_limit FROM budgets WHERE user_id = :user_id AND month = :month');
+            $budgetStmt->execute(['user_id' => $userId, 'month' => $currentMonth]);
+            $budgets = $budgetStmt->fetchAll();
+
+            $brokersList = $this->brokers->getAllBrokers($userId);
+            $holdings = $this->finance->holdings($userId);
+            $dashboard = $this->finance->dashboard($userId);
+
+            $advisorContext = [
+                'overview'          => $dashboard,
+                'personal_finance'  => $pfRecord,
+                'category_expenses' => $categoryExpenses,
+                'budgets'           => $budgets,
+                'brokers'           => $brokersList,
+                'holdings'          => $holdings,
+            ];
+
+            $result = (new AdvisorService())->respond($question, $advisorContext);
+            $this->audit($userId, 'advisor.query', 'advisor', null, ['mode' => $result['mode'] ?? 'unknown']);
             Http::json(['data' => $result]);
         }
 

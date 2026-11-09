@@ -1637,3 +1637,173 @@ dialog footer { justify-content: flex-end; }
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ==========================================================================
+   Multi-Broker Hub Styles (Zerodha, DhanHQ, Groww)
+   ========================================================================== */
+.broker-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.broker-hub-card {
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
+  margin-bottom: 0 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.broker-hub-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+}
+
+.dhan-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%) !important;
+  border: 1.5px solid #bfdbfe !important;
+}
+
+.groww-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf9 100%) !important;
+  border: 1.5px solid #a7f3d0 !important;
+}
+
+.dhan-btn {
+  background: #1463df !important;
+  color: #ffffff !important;
+  border-color: #1463df !important;
+  font-weight: 650;
+  box-shadow: 0 4px 12px rgba(20, 99, 223, 0.25);
+  transition: all .15s ease;
+}
+
+.dhan-btn:hover {
+  background: #0d4eb5 !important;
+  border-color: #0d4eb5 !important;
+  transform: translateY(-1px);
+}
+
+.groww-btn {
+  background: #00d09c !important;
+  color: #042f2e !important;
+  border-color: #00d09c !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 208, 156, 0.25);
+  transition: all .15s ease;
+}
+
+.groww-btn:hover {
+  background: #00b084 !important;
+  border-color: #00b084 !important;
+  transform: translateY(-1px);
+}
+
+.dhan-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #1463df);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 850;
+  box-shadow: 0 4px 14px rgba(20, 99, 223, 0.35);
+  flex-shrink: 0;
+}
+
+.groww-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981, #00d09c);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 850;
+  box-shadow: 0 4px 14px rgba(0, 208, 156, 0.35);
+  flex-shrink: 0;
+}
+
+.dhan-broker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.groww-broker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.manual-broker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   AI Advisor Quick Prompt Chips
+   ========================================================================== */
+.advisor-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 10px;
+}
+
+.advisor-chip {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.advisor-chip:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.advisor-chip i {
+  color: #4f46e5;
+}
+

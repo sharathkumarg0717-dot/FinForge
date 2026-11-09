@@ -1108,18 +1108,35 @@
     $('#transactions-table').innerHTML = state.transactions.map((item) => `<tr><td><span class="transaction-cell"><span class="transaction-glyph ${item.direction === 'income' ? 'amount-income' : 'amount-expense'}"><i class="fa-solid ${item.direction === 'income' ? 'fa-arrow-down' : 'fa-arrow-up'}"></i></span><b>${esc(item.description)}</b></span></td><td><span class="type-chip">${esc(item.category)}</span></td><td><span>${esc(item.institution)}<small class="table-sub">${esc(item.masked_number)}</small></span></td><td>${dateLabel(item.transaction_date)}</td><td class="align-right"><b class="${item.direction === 'income' ? 'amount-income' : ''}">${item.direction === 'income' ? '+' : '−'}${money(item.amount)}</b></td></tr>`).join('');
   }
 
+  function formatMarkdown(text) {
+    if (!text) return '';
+    let html = esc(text);
+    // Headings
+    html = html.replace(/^### (.*$)/gim, '<h4 style="margin:12px 0 6px; color:#0f172a; font-size:14px; font-weight:750;">$1</h4>');
+    html = html.replace(/^## (.*$)/gim, '<h3 style="margin:14px 0 8px; color:#0f172a; font-size:15px; font-weight:800;">$1</h3>');
+    // Bold
+    html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    // List bullets
+    html = html.replace(/^[•\-] (.*$)/gim, '<div style="margin-left:14px; position:relative; margin-bottom:3px;"><span style="position:absolute; left:-12px; color:#4f46e5;">•</span>$1</div>');
+    return html;
+  }
+
   async function loadInvestments() {
-    const [holdings, zerodhaData] = await Promise.all([
+    const [holdings, brokersData] = await Promise.all([
       api('/api/investments'),
-      api('/api/zerodha').catch(() => null),
+      api('/api/brokers').catch(() => ({})),
     ]);
     state.investments = holdings || [];
-    state.zerodha = zerodhaData;
+    state.brokers = brokersData || {};
 
     let totalVal = 0;
     let totalInvested = 0;
     let zerodhaVal = 0;
     let zerodhaCount = 0;
+    let dhanVal = 0;
+    let dhanCount = 0;
+    let growwVal = 0;
+    let growwCount = 0;
 
     state.investments.forEach((h) => {
       const val = Number(h.market_value) || 0;
@@ -1130,7 +1147,14 @@
       totalVal += val;
       totalInvested += cost;
 
-      if (h.provider_key === 'zerodha_kite' || (h.institution && h.institution.includes('Zerodha'))) {
+      const instLower = (h.institution || h.provider_key || '').toLowerCase();
+      if (instLower.includes('dhan')) {
+        dhanVal += val;
+        dhanCount++;
+      } else if (instLower.includes('groww')) {
+        growwVal += val;
+        growwCount++;
+      } else if (instLower.includes('zerodha')) {
         zerodhaVal += val;
         zerodhaCount++;
       }
@@ -1151,39 +1175,87 @@
       $('#portfolio-pnl-pct').className = `status-chip ${totalPnl >= 0 ? 'success-chip' : 'danger-chip'}`;
     }
     if ($('#holdings-count-note')) $('#holdings-count-note').textContent = `${state.investments.length} instruments tracked`;
-    if ($('#zerodha-holdings-val')) $('#zerodha-holdings-val').textContent = money(zerodhaVal);
-    if ($('#zerodha-holdings-count')) $('#zerodha-holdings-count').textContent = `${zerodhaCount} Zerodha Demat shares`;
+    if ($('#zerodha-holdings-val')) $('#zerodha-holdings-val').textContent = money(zerodhaVal || (state.brokers?.zerodha?.total_value || 0));
+    if ($('#dhan-holdings-val')) $('#dhan-holdings-val').textContent = money(dhanVal || (state.brokers?.dhan?.total_value || 0));
+    if ($('#groww-holdings-val')) $('#groww-holdings-val').textContent = money(growwVal || (state.brokers?.groww?.total_value || 0));
 
-    // Update Zerodha Status Card
-    const zTitle = $('#zerodha-card-title');
-    const zSub = $('#zerodha-card-sub');
+    // Update Zerodha Hub Card
+    const zBroker = state.brokers?.zerodha || {};
+    const zChip = $('#zerodha-status-chip');
     const zDetails = $('#zerodha-connected-details');
     const zActions = $('#zerodha-actions-container');
+    const isZConnected = zBroker.status === 'connected';
 
-    if (zerodhaData && zerodhaData.account) {
-      const acc = zerodhaData.account;
-      if (zTitle) zTitle.innerHTML = '<span class="status-chip success-chip" style="margin-right:8px;"><i class="fa-solid fa-check"></i> Connected</span> Zerodha Broking Ltd (Kite)';
-      if (zSub) zSub.textContent = `Actual Demat Account linked (${acc.masked_number || 'Kite Account'}). Real-time portfolio tracking active.`;
-      if (zDetails) {
-        zDetails.hidden = false;
-        if ($('#zerodha-client-display')) $('#zerodha-client-display').textContent = acc.client_id || 'Active User';
-        if ($('#zerodha-synced-at')) $('#zerodha-synced-at').textContent = acc.last_synced_at ? dateLabel(acc.last_synced_at.slice(0, 10)) : 'Live';
+    if (zChip) {
+      zChip.textContent = isZConnected ? 'Connected' : 'Disconnected';
+      zChip.className = `status-chip ${isZConnected ? 'success-chip' : 'neutral-chip'}`;
+    }
+    if (zDetails) zDetails.hidden = !isZConnected;
+    if ($('#zerodha-client-display')) $('#zerodha-client-display').textContent = zBroker.client_id || 'Active User';
+    if ($('#zerodha-holdings-count-badge')) $('#zerodha-holdings-count-badge').textContent = String(zBroker.holdings_count || zerodhaCount);
+    if ($('#zerodha-card-value')) $('#zerodha-card-value').textContent = money(zBroker.total_value || zerodhaVal);
+    if (zActions) {
+      zActions.innerHTML = isZConnected
+        ? `
+          <button class="outline-button small-button broker-sync-btn" data-broker="zerodha" type="button"><i class="fa-solid fa-arrows-rotate"></i> Sync Kite</button>
+          <button class="outline-button small-button open-zerodha-dialog" data-tab="tab-manual" type="button"><i class="fa-solid fa-sliders"></i> Manage</button>
+          <button class="text-button small-button broker-disconnect-btn" data-broker="zerodha" type="button" style="color:#ef4444;"><i class="fa-solid fa-unlink"></i> Disconnect</button>
+        `
+        : `<button class="primary-button small-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha</button>`;
+    }
+
+    // Update Dhan Hub Card
+    const dBroker = state.brokers?.dhan || {};
+    const dChip = $('#dhan-status-chip');
+    const dDetails = $('#dhan-connected-details');
+    const dActions = $('#dhan-actions-container');
+    const isDConnected = dBroker.status === 'connected';
+
+    if (dChip) {
+      if (dBroker.status === 'token_expired') {
+        dChip.textContent = 'Token Expired';
+        dChip.className = 'status-chip warning-chip';
+      } else {
+        dChip.textContent = isDConnected ? 'Connected' : 'Disconnected';
+        dChip.className = `status-chip ${isDConnected ? 'success-chip' : 'neutral-chip'}`;
       }
-      if (zActions) {
-        zActions.innerHTML = `
-          <button class="outline-button small-button" id="quick-add-stock-btn" type="button"><i class="fa-solid fa-plus"></i> Add Stock</button>
-          <button class="outline-button small-button open-zerodha-dialog" data-tab="tab-csv" type="button"><i class="fa-solid fa-file-csv"></i> Import CSV</button>
-          <button class="outline-button small-button open-zerodha-dialog" data-tab="tab-api" type="button"><i class="fa-solid fa-bolt"></i> Kite Sync</button>
-          <button class="primary-button small-button open-zerodha-dialog" data-tab="tab-manual" type="button"><i class="fa-solid fa-sliders"></i> Manage</button>
-        `;
-      }
-    } else {
-      if (zTitle) zTitle.textContent = 'Connect Zerodha Demat Account';
-      if (zSub) zSub.textContent = 'Link your actual Zerodha Kite Demat account to track your Indian stocks, ETFs & mutual funds in Rupees (₹).';
-      if (zDetails) zDetails.hidden = true;
-      if (zActions) {
-        zActions.innerHTML = `<button class="primary-button zerodha-btn open-zerodha-dialog" type="button"><i class="fa-solid fa-bolt"></i> Connect Zerodha Demat</button>`;
-      }
+    }
+    if (dDetails) dDetails.hidden = !isDConnected && dBroker.status !== 'token_expired';
+    if ($('#dhan-client-display')) $('#dhan-client-display').textContent = dBroker.client_id || 'Active User';
+    if ($('#dhan-holdings-count-badge')) $('#dhan-holdings-count-badge').textContent = String(dBroker.holdings_count || dhanCount);
+    if ($('#dhan-card-value')) $('#dhan-card-value').textContent = money(dBroker.total_value || dhanVal);
+    if (dActions) {
+      dActions.innerHTML = isDConnected
+        ? `
+          <button class="outline-button small-button broker-sync-btn" data-broker="dhan" type="button"><i class="fa-solid fa-arrows-rotate"></i> Sync DhanHQ</button>
+          <button class="outline-button small-button open-dhan-dialog" type="button"><i class="fa-solid fa-key"></i> New Token</button>
+          <button class="text-button small-button broker-disconnect-btn" data-broker="dhan" type="button" style="color:#ef4444;"><i class="fa-solid fa-unlink"></i> Disconnect</button>
+        `
+        : `<button class="primary-button small-button dhan-btn open-dhan-dialog" type="button"><i class="fa-solid fa-gem"></i> Connect Dhan</button>`;
+    }
+
+    // Update Groww Hub Card
+    const gBroker = state.brokers?.groww || {};
+    const gChip = $('#groww-status-chip');
+    const gDetails = $('#groww-connected-details');
+    const gActions = $('#groww-actions-container');
+    const isGConnected = gBroker.status === 'connected';
+
+    if (gChip) {
+      gChip.textContent = isGConnected ? 'Imported' : 'Not Imported';
+      gChip.className = `status-chip ${isGConnected ? 'success-chip' : 'neutral-chip'}`;
+    }
+    if (gDetails) gDetails.hidden = !isGConnected;
+    if ($('#groww-holdings-count-badge')) $('#groww-holdings-count-badge').textContent = String(gBroker.holdings_count || growwCount);
+    if ($('#groww-card-value')) $('#groww-card-value').textContent = money(gBroker.total_value || growwVal);
+    if ($('#groww-synced-at')) $('#groww-synced-at').textContent = gBroker.last_sync_at ? dateLabel(gBroker.last_sync_at.slice(0, 10)) : 'Statement CSV';
+    if (gActions) {
+      gActions.innerHTML = isGConnected
+        ? `
+          <button class="outline-button small-button open-groww-dialog" type="button"><i class="fa-solid fa-file-import"></i> Re-import CSV</button>
+          <button class="text-button small-button broker-disconnect-btn" data-broker="groww" type="button" style="color:#ef4444;"><i class="fa-solid fa-trash-can"></i> Remove</button>
+        `
+        : `<button class="primary-button small-button groww-btn open-groww-dialog" type="button"><i class="fa-solid fa-file-import"></i> Import Groww CSV</button>`;
     }
 
     // Render Holdings Table
@@ -1197,7 +1269,23 @@
       const ltp = Number(item.price) || 0;
       const pnl = item.pnl !== null && item.pnl !== undefined ? Number(item.pnl) : (val - (buyP * units));
       const pnlPct = (buyP * units) > 0 ? (pnl / (buyP * units)) * 100 : 0;
-      const isZerodha = item.provider_key === 'zerodha_kite' || (item.institution && item.institution.includes('Zerodha'));
+      
+      const instLower = (item.institution || item.provider_key || '').toLowerCase();
+      let brokerPill = '<span class="manual-broker-pill"><i class="fa-solid fa-wallet"></i> Direct</span>';
+      let subCategory = 'Direct Holding';
+
+      if (instLower.includes('dhan')) {
+        brokerPill = '<span class="dhan-broker-pill"><i class="fa-solid fa-gem"></i> Dhan</span>';
+        subCategory = 'DhanHQ Demat Equity';
+      } else if (instLower.includes('groww')) {
+        brokerPill = '<span class="groww-broker-pill"><i class="fa-solid fa-leaf"></i> Groww</span>';
+        subCategory = 'Groww Demat Equity';
+      } else if (instLower.includes('zerodha')) {
+        brokerPill = '<span class="zerodha-broker-pill"><i class="fa-solid fa-bolt"></i> Zerodha</span>';
+        subCategory = 'NSE/BSE Kite Demat';
+      } else if (item.institution) {
+        brokerPill = `<span class="type-chip">${esc(item.institution)}</span>`;
+      }
 
       const pnlClass = pnl >= 0 ? 'amount-income' : 'amount-expense';
 
@@ -1208,16 +1296,12 @@
               <span class="stock-avatar-mini">${esc(item.symbol ? item.symbol.slice(0, 2) : 'EQ')}</span>
               <div>
                 <b>${esc(item.instrument || item.symbol)}</b>
-                <small style="display:block; color:#64748b; font-size:10px;">${isZerodha ? 'NSE/BSE Demat Equity' : 'Synthetic Holding'}</small>
+                <small style="display:block; color:#64748b; font-size:10px;">${subCategory}</small>
               </div>
             </div>
           </td>
           <td><span class="symbol-chip">${esc(item.symbol)}</span></td>
-          <td>
-            <span class="${isZerodha ? 'zerodha-broker-pill' : 'type-chip'}">
-              ${isZerodha ? '<i class="fa-solid fa-bolt" style="color:#ff5722;"></i> Zerodha' : esc(item.institution)}
-            </span>
-          </td>
+          <td>${brokerPill}</td>
           <td class="align-right"><b>${units.toFixed(units % 1 === 0 ? 0 : 3)}</b></td>
           <td class="align-right">${buyP > 0 ? money(buyP) : '—'}</td>
           <td class="align-right"><b>${money(ltp)}</b></td>
@@ -1285,12 +1369,13 @@
     try {
       const result = await api('/api/advisor', { method: 'POST', body: { question } });
       pending.classList.remove('pending-bubble');
-      let badgeLabel = 'Dynamic Analysis';
+      let badgeLabel = 'FinSync Intelligence';
       if (result.mode === 'live_ai_openai') badgeLabel = `Live AI (${result.model || 'OpenAI'})`;
       else if (result.mode === 'live_ai_gemini') badgeLabel = `Live AI (${result.model || 'Gemini'})`;
+      else if (result.mode === 'live_builtin_ai') badgeLabel = 'Autonomous AI Engine';
       else if (result.mode === 'api_error') badgeLabel = 'API Notice';
 
-      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI · ${esc(badgeLabel)}</b><p style="white-space: pre-wrap;">${esc(result.answer)}</p><small>${esc(result.disclaimer)}</small></div>`;
+      pending.innerHTML = `<span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI · ${esc(badgeLabel)}</b><div style="margin-top:6px; line-height:1.6;">${formatMarkdown(result.answer)}</div><small style="display:block; margin-top:8px; opacity:0.8;">${esc(result.disclaimer)}</small></div>`;
     } catch (error) {
       pending.classList.remove('pending-bubble');
       pending.classList.add('error-bubble');
@@ -2130,6 +2215,166 @@
       await loadInvestments();
     } catch (err) {
       if (errEl) errEl.textContent = err.message || 'Could not add holding.';
+    }
+  });
+
+  // --- Multi-Broker Modal Handlers (Dhan, Groww, Zerodha & Sync All) ---
+
+  // Dhan Modal
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.open-dhan-dialog')) {
+      const errEl = $('#dhan-modal-error');
+      if (errEl) errEl.textContent = '';
+      $('#dhan-modal')?.showModal();
+    }
+  });
+  $('#dhan-modal-close')?.addEventListener('click', () => $('#dhan-modal')?.close());
+
+  $('#dhan-connect-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const clientId = (form.client_id?.value || '').trim();
+    const accessToken = (form.access_token?.value || '').trim();
+    const errEl = $('#dhan-modal-error');
+    const submitBtn = $('#dhan-modal-submit');
+    if (errEl) errEl.textContent = '';
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await api('/api/brokers/dhan/connect', {
+        method: 'POST',
+        body: { client_id: clientId, access_token: accessToken }
+      });
+      $('#dhan-modal')?.close();
+      toast(`Connected DhanHQ! Synced ${res.imported_count || 0} holdings.`);
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not connect to DhanHQ API.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Groww Modal
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.open-groww-dialog')) {
+      const errEl = $('#groww-modal-error');
+      if (errEl) errEl.textContent = '';
+      $('#groww-modal')?.showModal();
+    }
+  });
+  $('#groww-modal-close')?.addEventListener('click', () => $('#groww-modal')?.close());
+
+  // Groww File drop & select
+  const growwDrop = $('#groww-file-drop');
+  const growwFileInput = $('#groww-csv-file');
+  growwDrop?.addEventListener('click', () => growwFileInput?.click());
+  growwFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        if ($('#groww-csv-text')) $('#groww-csv-text').value = re.target.result;
+        toast(`Loaded CSV: ${file.name}`);
+      };
+      reader.readAsText(file);
+    }
+  });
+
+  $('#groww-import-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const csvContent = (form.csv_content?.value || '').trim();
+    const errEl = $('#groww-modal-error');
+    const submitBtn = $('#groww-modal-submit');
+    if (!csvContent) {
+      if (errEl) errEl.textContent = 'Please choose a CSV file or paste the CSV report content.';
+      return;
+    }
+    if (errEl) errEl.textContent = '';
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await api('/api/brokers/groww/connect', {
+        method: 'POST',
+        body: { csv_content: csvContent }
+      });
+      $('#groww-modal')?.close();
+      toast(`Imported ${res.imported_count || 0} holdings from Groww CSV!`);
+      await loadInvestments();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not import Groww CSV.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Broker Sync & Disconnect Buttons
+  document.addEventListener('click', async (e) => {
+    const syncBtn = e.target.closest('.broker-sync-btn');
+    if (syncBtn) {
+      const broker = syncBtn.dataset.broker;
+      if (!broker) return;
+      syncBtn.disabled = true;
+      const originalHtml = syncBtn.innerHTML;
+      syncBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Syncing…';
+      try {
+        const res = await api(`/api/brokers/${broker}/sync`, { method: 'POST', body: {} });
+        toast(`Synced ${res.imported_count || 0} holdings from ${broker.toUpperCase()}!`);
+        await loadInvestments();
+      } catch (err) {
+        handleError(err);
+      } finally {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = originalHtml;
+      }
+      return;
+    }
+
+    const discBtn = e.target.closest('.broker-disconnect-btn');
+    if (discBtn) {
+      const broker = discBtn.dataset.broker;
+      if (!broker) return;
+      if (!confirm(`Are you sure you want to disconnect ${broker.toUpperCase()}?`)) return;
+      discBtn.disabled = true;
+      try {
+        await api(`/api/brokers/${broker}/disconnect`, { method: 'POST', body: {} });
+        toast(`Disconnected ${broker.toUpperCase()}.`);
+        await loadInvestments();
+      } catch (err) {
+        handleError(err);
+      }
+      return;
+    }
+  });
+
+  // Sync All Brokers Button
+  $('#sync-all-brokers-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Syncing All…';
+    try {
+      await api('/api/brokers/sync-all', { method: 'POST', body: {} });
+      toast('Portfolio holdings synchronized across all active brokers!');
+      await loadInvestments();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  });
+
+  // AI Advisor Prompt Chips
+  $('#advisor-chips')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.advisor-chip');
+    if (!chip) return;
+    const query = chip.dataset.query;
+    const input = $('#advisor-question');
+    if (input && query) {
+      input.value = query;
+      $('#advisor-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     }
   });
 
