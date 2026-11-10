@@ -1165,9 +1165,23 @@ final class FinanceRepository
         foreach ($records as &$record) {
             $categories = json_decode((string)$record['expense_categories'], true);
             if (!is_array($categories)) {
-                throw new \RuntimeException('A stored personal-finance category breakdown is invalid.');
+                $categories = [];
             }
-            $record['expense_categories'] = $categories;
+            $normalizedCategories = [];
+            foreach ($categories as $k => $v) {
+                if (is_array($v) && isset($v['category'], $v['amount'])) {
+                    $normalizedCategories[] = [
+                        'category' => (string)$v['category'],
+                        'amount'   => (string)$v['amount'],
+                    ];
+                } elseif (is_string($k) && (is_numeric($v) || is_string($v))) {
+                    $normalizedCategories[] = [
+                        'category' => $k,
+                        'amount'   => (string)$v,
+                    ];
+                }
+            }
+            $record['expense_categories'] = $normalizedCategories;
             $m = substr((string)$record['record_month'], 0, 7);
             if (!in_array($m, $recordedMonths, true)) {
                 $recordedMonths[] = $m;
@@ -1213,11 +1227,12 @@ final class FinanceRepository
 
             $categories = $record['expense_categories'];
             foreach ($categories as $category) {
-                if (!is_array($category) || !isset($category['category'], $category['amount'])) {
-                    throw new \RuntimeException('A stored personal-finance category entry is invalid.');
+                if (!is_array($category)) {
+                    continue;
                 }
-                $name = (string)$category['category'];
-                $categoryTotals[$name] = ($categoryTotals[$name] ?? 0.0) + (float)$category['amount'];
+                $name = (string)($category['category'] ?? 'Other');
+                $amt = (float)($category['amount'] ?? 0.0);
+                $categoryTotals[$name] = ($categoryTotals[$name] ?? 0.0) + $amt;
             }
             if (trim((string)$record['financial_goals']) !== '') {
                 $analysis['goals'][] = [
