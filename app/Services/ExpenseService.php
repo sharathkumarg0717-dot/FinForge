@@ -275,12 +275,12 @@ final class ExpenseService
                     SUM(CASE WHEN type = "expense" THEN amount ELSE 0 END) AS expense
              FROM expenses
              WHERE user_id = :user_id
-               AND transaction_date >= DATE_SUB(STR_TO_DATE(CONCAT(:month, "-01"), "%Y-%m-%d"), INTERVAL 5 MONTH)
-               AND transaction_date <= LAST_DAY(STR_TO_DATE(CONCAT(:month, "-01"), "%Y-%m-%d"))
+               AND transaction_date >= DATE_SUB(STR_TO_DATE(CONCAT(:start_month, "-01"), "%Y-%m-%d"), INTERVAL 5 MONTH)
+               AND transaction_date <= LAST_DAY(STR_TO_DATE(CONCAT(:end_month, "-01"), "%Y-%m-%d"))
              GROUP BY m
              ORDER BY m ASC'
         );
-        $trendStmt->execute(['user_id' => $userId, 'month' => $month]);
+        $trendStmt->execute(['user_id' => $userId, 'start_month' => $month, 'end_month' => $month]);
         $trends = array_map(function ($row) {
             return [
                 'month'   => $row['m'],

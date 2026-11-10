@@ -1440,8 +1440,7 @@
       if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
     const input = $('#advisor-question');
-    const form = $('#advisor-form');
-    const submitBtn = form ? $('button[type="submit"]', form) : null;
+    const submitBtn = $('#advisor-send-btn') || $('#advisor-form button[type="submit"]');
     const question = input ? input.value.trim() : '';
     if (!question) return;
     if (submitBtn) submitBtn.disabled = true;
@@ -1467,10 +1466,10 @@
       pending.classList.remove('pending-bubble');
       pending.classList.add('error-bubble');
       pending.innerHTML = `<span class="chat-avatar error-avatar"><i class="fa-solid fa-circle-exclamation"></i></span><div><b>FinSync AI</b><p class="chat-error-text">${esc(error.message || 'Unable to generate insight at this time. Please try again.')}</p></div>`;
-      handleError(error);
+      showNotice(error.message || 'Unable to generate insight.', 'error');
     } finally {
       if (submitBtn) submitBtn.disabled = false;
-      input.focus();
+      if (input) input.focus();
     }
     messages.scrollTop = messages.scrollHeight;
   }
@@ -2046,18 +2045,18 @@
       else goTo('consent');
     } catch (error) { handleError(error); }
   });
-  const triggerAdvisor = (event) => {
+  $('#advisor-send-btn')?.addEventListener('click', (event) => {
     if (event) {
       if (typeof event.preventDefault === 'function') event.preventDefault();
       if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
-    submitAdvisor(event);
-  };
-  $('#advisor-form')?.addEventListener('submit', triggerAdvisor);
-  $('#advisor-form button[type="submit"]')?.addEventListener('click', triggerAdvisor);
+    submitAdvisor();
+  });
   $('#advisor-question')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
-      triggerAdvisor(event);
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      submitAdvisor();
     }
   });
   $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('sidebar-open'));
@@ -2494,7 +2493,7 @@
     const input = $('#advisor-question');
     if (input && query) {
       input.value = query;
-      $('#advisor-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      submitAdvisor();
     }
   });
 
