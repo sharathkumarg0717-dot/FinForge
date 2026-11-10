@@ -1181,15 +1181,20 @@
     const query = category ? `?category=${encodeURIComponent(category)}` : '';
     state.transactions = await api(`/api/transactions${query}`);
     const select = $('#transaction-filter');
-    const selected = select.value;
-    const categories = [...new Set(state.transactions.map((transaction) => transaction.category))].sort();
-    if (!category) {
-      select.innerHTML = '<option value="">All categories</option>' + categories.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join('');
-      select.value = selected;
+    if (select) {
+      const selected = select.value;
+      const categories = [...new Set(state.transactions.map((transaction) => transaction.category))].sort();
+      if (!category) {
+        select.innerHTML = '<option value="">All categories</option>' + categories.map((item) => `<option value="${esc(item)}">${esc(item)}</option>`).join('');
+        select.value = selected;
+      }
     }
-    $('#transaction-count').textContent = `${state.transactions.length} synthetic entries`;
-    $('#transactions-empty').hidden = state.transactions.length > 0;
-    $('#transactions-table').innerHTML = state.transactions.map((item) => `<tr><td><span class="transaction-cell"><span class="transaction-glyph ${item.direction === 'income' ? 'amount-income' : 'amount-expense'}"><i class="fa-solid ${item.direction === 'income' ? 'fa-arrow-down' : 'fa-arrow-up'}"></i></span><b>${esc(item.description)}</b></span></td><td><span class="type-chip">${esc(item.category)}</span></td><td><span>${esc(item.institution)}<small class="table-sub">${esc(item.masked_number)}</small></span></td><td>${dateLabel(item.transaction_date)}</td><td class="align-right"><b class="${item.direction === 'income' ? 'amount-income' : ''}">${item.direction === 'income' ? '+' : '−'}${money(item.amount)}</b></td></tr>`).join('');
+    const count = $('#transaction-count');
+    if (count) count.textContent = `${state.transactions.length} synthetic entries`;
+    const empty = $('#transactions-empty');
+    if (empty) empty.hidden = state.transactions.length > 0;
+    const table = $('#transactions-table');
+    if (table) table.innerHTML = state.transactions.map((item) => `<tr><td><span class="transaction-cell"><span class="transaction-glyph ${item.direction === 'income' ? 'amount-income' : 'amount-expense'}"><i class="fa-solid ${item.direction === 'income' ? 'fa-arrow-down' : 'fa-arrow-up'}"></i></span><b>${esc(item.description)}</b></span></td><td><span class="type-chip">${esc(item.category)}</span></td><td><span>${esc(item.institution)}<small class="table-sub">${esc(item.masked_number)}</small></span></td><td>${dateLabel(item.transaction_date)}</td><td class="align-right"><b class="${item.direction === 'income' ? 'amount-income' : ''}">${item.direction === 'income' ? '+' : '−'}${money(item.amount)}</b></td></tr>`).join('');
   }
 
   function formatMarkdown(text) {
@@ -1471,8 +1476,11 @@
       if (submitBtn) submitBtn.disabled = false;
       if (input) input.focus();
     }
-    messages.scrollTop = messages.scrollHeight;
+    if (messages) {
+      messages.scrollTop = messages.scrollHeight;
+    }
   }
+  window.submitAdvisor = submitAdvisor;
 
   async function completeAuth(result, toastMessage = 'Welcome back.') {
     if (!result || !result.user) {
@@ -1823,7 +1831,7 @@
     toast('You have been signed out from all devices.');
   });
 
-  $('#logout-button').addEventListener('click', async () => {
+  $('#logout-button')?.addEventListener('click', async () => {
     try { await api('/api/logout', { method: 'POST', body: {} }); }
     catch (error) { handleError(error); }
     state.user = null;
@@ -1836,7 +1844,8 @@
     state.family = [];
     clearPersonalFinanceView();
     $('#auth-form')?.reset();
-    $('#auth-message').textContent = '';
+    const authMsg = $('#auth-message');
+    if (authMsg) authMsg.textContent = '';
     try {
       const anonymousSession = await api('/api/session');
       state.csrf = anonymousSession.csrf_token || '';
@@ -1847,22 +1856,24 @@
     initGoogleAuth();
     toast('You have signed out.');
   });
-  $('#refresh-button').addEventListener('click', () => loadDashboard().then(() => toast('Overview refreshed.')).catch(handleError));
-  $('#finance-month').value = currentMonth();
-  $('#finance-month').addEventListener('change', (event) => {
+  $('#refresh-button')?.addEventListener('click', () => loadDashboard().then(() => toast('Overview refreshed.')).catch(handleError));
+  const finMonth = $('#finance-month');
+  if (finMonth) finMonth.value = currentMonth();
+  $('#finance-month')?.addEventListener('change', (event) => {
     if (event.target.value) loadPersonalFinance(event.target.value, true).catch(handleError);
   });
   const openFinanceForm = () => {
-    resetFinanceForm($('#finance-month').value || currentMonth());
-    $('#finance-form-panel').hidden = false;
-    $('#finance-form-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    $('#finance-form [name="monthly_income"]').focus();
+    resetFinanceForm($('#finance-month')?.value || currentMonth());
+    const panel = $('#finance-form-panel');
+    if (panel) panel.hidden = false;
+    $('#finance-form-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#finance-form [name="monthly_income"]')?.focus();
   };
-  $('#finance-open-form').addEventListener('click', openFinanceForm);
-  $('#add-finance-record').addEventListener('click', openFinanceForm);
-  $('#finance-form-close').addEventListener('click', () => { $('#finance-form-panel').hidden = true; });
-  $('#add-finance-category').addEventListener('click', () => addFinanceCategoryRow());
-  $('#finance-cancel-edit').addEventListener('click', () => resetFinanceForm());
+  $('#finance-open-form')?.addEventListener('click', openFinanceForm);
+  $('#add-finance-record')?.addEventListener('click', openFinanceForm);
+  $('#finance-form-close')?.addEventListener('click', () => { const p = $('#finance-form-panel'); if (p) p.hidden = true; });
+  $('#add-finance-category')?.addEventListener('click', () => addFinanceCategoryRow());
+  $('#finance-cancel-edit')?.addEventListener('click', () => resetFinanceForm());
 
   const syncBtn = $('#sync-category-expense');
   if (syncBtn) {
@@ -1882,7 +1893,7 @@
     catFields.addEventListener('input', () => updateCategorySum());
   }
 
-  $('#finance-form').addEventListener('submit', async (event) => {
+  $('#finance-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     if (!form.checkValidity()) {
@@ -1952,10 +1963,10 @@
       button.innerHTML = origBtnHtml;
     }
   });
-  $('#transaction-filter').addEventListener('change', (event) => loadTransactions(event.target.value).catch(handleError));
-  $('#add-family-button').addEventListener('click', () => { $('#family-form-panel').hidden = false; $('#family-form [name="name"]').focus(); });
-  $('#family-form-close').addEventListener('click', () => { $('#family-form-panel').hidden = true; });
-  $('#family-form').addEventListener('submit', async (event) => {
+  $('#transaction-filter')?.addEventListener('change', (event) => loadTransactions(event.target.value).catch(handleError));
+  $('#add-family-button')?.addEventListener('click', () => { $('#family-form-panel').hidden = false; $('#family-form [name="name"]')?.focus(); });
+  $('#family-form-close')?.addEventListener('click', () => { const p = $('#family-form-panel'); if (p) p.hidden = true; });
+  $('#family-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget || event.target || $('#family-form');
     if (!form) return;
@@ -1979,10 +1990,12 @@
   });
 
   $('#member-back-button')?.addEventListener('click', () => {
-    $('#family-member-view').hidden = true;
-    $('#family-main-view').hidden = false;
+    const fv = $('#family-member-view');
+    const fm = $('#family-main-view');
+    if (fv) fv.hidden = true;
+    if (fm) fm.hidden = false;
     state.selectedFamilyMemberId = null;
-    $('#screen-family').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#screen-family')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   $('#member-select-switcher')?.addEventListener('change', (event) => {
@@ -2003,7 +2016,7 @@
   });
 
   $('#family-account-dialog-close')?.addEventListener('click', () => {
-    $('#family-account-dialog').close();
+    $('#family-account-dialog')?.close();
   });
 
   $('#family-account-form')?.addEventListener('submit', async (event) => {
@@ -2023,7 +2036,7 @@
     if (submitBtn) submitBtn.disabled = true;
     try {
       await api('/api/accounts', { method: 'POST', body });
-      $('#family-account-dialog').close();
+      $('#family-account-dialog')?.close();
       toast('Demo account successfully connected!');
       await loadFamily(true);
       await loadAccounts();
@@ -2033,7 +2046,7 @@
       if (submitBtn) submitBtn.disabled = false;
     }
   });
-  $('#consent-toggle').addEventListener('click', async () => {
+  $('#consent-toggle')?.addEventListener('click', async () => {
     const next = !state.consent;
     if (!next && !window.confirm('Revoke access to the synthetic family-finance records? Finance and advisor views will be paused.')) return;
     try {
@@ -2050,18 +2063,18 @@
       if (typeof event.preventDefault === 'function') event.preventDefault();
       if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
-    submitAdvisor();
+    submitAdvisor(event);
   });
   $('#advisor-question')?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.keyCode === 13) {
       if (typeof event.preventDefault === 'function') event.preventDefault();
       if (typeof event.stopPropagation === 'function') event.stopPropagation();
-      submitAdvisor();
+      submitAdvisor(event);
     }
   });
-  $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('sidebar-open'));
-  $('#receipt-close').addEventListener('click', () => $('#receipt-dialog').close());
-  $('#receipt-ok').addEventListener('click', () => $('#receipt-dialog').close());
+  $('#mobile-menu')?.addEventListener('click', () => $('#sidebar')?.classList.toggle('sidebar-open'));
+  $('#receipt-close')?.addEventListener('click', () => $('#receipt-dialog')?.close());
+  $('#receipt-ok')?.addEventListener('click', () => $('#receipt-dialog')?.close());
 
   $('#google-signin-custom')?.addEventListener('click', () => {
     if (window.FINSYNC_GOOGLE_CLIENT_ID && window.google?.accounts?.id) {
