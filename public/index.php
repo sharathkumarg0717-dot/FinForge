@@ -31,6 +31,7 @@ require_once dirname(__DIR__) . '/app/Controllers/ApiController.php';
 use FinSync\Core\Database;
 use FinSync\Core\Http;
 use FinSync\Core\Security;
+use FinSync\Models\FinanceRepository;
 use FinSync\Controllers\ApiController;
 
 Security::startSession();
@@ -88,6 +89,9 @@ if (str_starts_with($requestPath, '/api/')) {
 }
 
 header('Content-Type: text/html; charset=utf-8');
+header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
@@ -105,7 +109,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   <link rel="preconnect" href="https://accounts.google.com">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-  <link rel="stylesheet" href="<?= Security::escape($basePath) ?>/assets/app.css?v=<?= @filemtime(__DIR__ . '/assets/app.css') ?: '2' ?>">
+  <link rel="stylesheet" href="<?= Security::escape($basePath) ?>/assets/app.css?v=<?= time() ?>">
   <script nonce="<?= Security::escape($nonce) ?>">
     window.FINSYNC_BASE = <?= json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     window.FINSYNC_GOOGLE_CLIENT_ID = <?= json_encode($googleClientId, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -115,8 +119,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 </head>
 <body>
   <div id="auth-view" class="auth-shell">
-    <section class="auth-brand" aria-label="FinForge introduction">
-      <a class="brand brand-light" href="#" aria-label="FinForge home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
+    <section class="auth-brand" aria-label="FinSync introduction">
+      <a class="brand brand-light" href="#" aria-label="FinSync home"><span class="brand-mark"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span><span>Fin<span>Sync</span></span></a>
       <div class="auth-intro">
         <p class="eyebrow">A CLEARER VIEW OF YOUR WEALTH</p>
         <h1>Smart finances,<br><em>in focus.</em></h1>
@@ -133,10 +137,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">Sign in</button>
           <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">Create account</button>
         </div>
-        <form id="auth-form" novalidate>
+        <form id="auth-form" data-mode="login" novalidate>
           <label id="name-field" hidden>Your name<input name="name" autocomplete="name" maxlength="120" placeholder="e.g. Alex Morgan"></label>
           <label>Email address<input name="email" type="email" autocomplete="email" maxlength="190" required placeholder="you@example.com"></label>
-          <label id="password-field">Password<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="200" required placeholder="At least 10 characters"></label>
+          <label id="password-field">Password<input name="password" type="password" autocomplete="current-password" minlength="6" maxlength="200" required placeholder="At least 6 characters"></label>
           <div id="forgot-password-row" style="text-align: right; margin: -8px 0 12px;">
             <a href="#" id="forgot-password-link" style="font-size: 12px; color: #4338ca; text-decoration: none;">Forgot password?</a>
           </div>
@@ -1692,6 +1696,6 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" nonce="<?= Security::escape($nonce) ?>"></script>
-  <script src="<?= Security::escape($basePath) ?>/assets/app.js?v=<?= @filemtime(__DIR__ . '/assets/app.js') ?: '2' ?>" defer nonce="<?= Security::escape($nonce) ?>"></script>
+  <script src="<?= Security::escape($basePath) ?>/assets/app.js?v=<?= time() ?>" defer nonce="<?= Security::escape($nonce) ?>"></script>
 </body>
 </html>

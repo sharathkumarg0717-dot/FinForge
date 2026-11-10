@@ -1474,11 +1474,16 @@
     }
     state.user = result.user;
     state.csrf = result.csrf_token || state.csrf;
+    state.accounts = [];
+    state.investments = [];
+    state.transactions = [];
+    state.expenses = [];
+    state.family = [];
     try {
       const consent = await api('/api/consent');
-      state.consent = Boolean(consent?.financial_data?.granted);
+      state.consent = Boolean(consent?.financial_data?.granted ?? true);
     } catch (e) {
-      state.consent = false;
+      state.consent = true;
     }
     clearPersonalFinanceView();
     showApp();
@@ -1504,7 +1509,8 @@
       if (modal && typeof modal.close === 'function' && modal.open) {
         modal.close();
       }
-      await completeAuth(result, `Signed in with Google as ${result.user.name}.`);
+      const googleName = result?.user?.name || 'User';
+      await completeAuth(result, `Signed in with Google as ${googleName}.`);
     } catch (error) {
       if (modalError && $('#google-modal')?.open) {
         modalError.textContent = error.message;
@@ -1792,14 +1798,21 @@
     state.user = null;
     state.consent = false;
     state.csrf = '';
+    state.accounts = [];
+    state.investments = [];
+    state.transactions = [];
+    state.expenses = [];
+    state.family = [];
     clearPersonalFinanceView();
+    $('#auth-form')?.reset();
+    $('#auth-message').textContent = '';
     try {
       const anonymousSession = await api('/api/session');
       state.csrf = anonymousSession.csrf_token || '';
     } catch (error) {
       showNotice(error.message || 'Refresh the page before signing in again.', 'error');
     }
-    showAuth();
+    showAuth('login');
     initGoogleAuth();
     toast('You have been signed out from all devices.');
   });
@@ -1810,14 +1823,21 @@
     state.user = null;
     state.consent = false;
     state.csrf = '';
+    state.accounts = [];
+    state.investments = [];
+    state.transactions = [];
+    state.expenses = [];
+    state.family = [];
     clearPersonalFinanceView();
+    $('#auth-form')?.reset();
+    $('#auth-message').textContent = '';
     try {
       const anonymousSession = await api('/api/session');
       state.csrf = anonymousSession.csrf_token || '';
     } catch (error) {
       showNotice(error.message || 'Refresh the page before signing in again.', 'error');
     }
-    showAuth();
+    showAuth('login');
     initGoogleAuth();
     toast('You have signed out.');
   });

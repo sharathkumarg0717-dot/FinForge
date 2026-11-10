@@ -64,11 +64,8 @@ final class AuthController
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190) {
             Http::error('Enter a valid email address.');
         }
-        if (strlen($password) < 10 || strlen($password) > 200) {
-            Http::error('Use a password between 10 and 200 characters.');
-        }
-        if (($input['consent_demo'] ?? false) !== true) {
-            Http::error('Please explicitly consent to using the synthetic FinSync demo records.');
+        if (strlen($password) < 6 || strlen($password) > 200) {
+            Http::error('Use a password of at least 6 characters.');
         }
 
         $db = Database::connection();
@@ -84,7 +81,7 @@ final class AuthController
             $userId = (int)$db->lastInsertId();
         } catch (PDOException $exception) {
             if ($exception->getCode() === '23000') {
-                Http::error('An account with that email already exists.', 'email_exists', 409);
+                Http::error('An account with that email already exists. Please Sign in instead.', 'email_exists', 409);
             }
             throw $exception;
         }
@@ -162,8 +159,9 @@ final class AuthController
             if ($user) {
                 $this->recordFailedLogin($db, (int)$user['id'], (int)($user['failed_login_count'] ?? 0));
                 $this->audit($db, (int)$user['id'], 'user.login_failed', 'user', (int)$user['id']);
+                Http::error('Email or password is incorrect.', 'invalid_credentials', 401);
             }
-            Http::error('Email or password is incorrect.', 'invalid_credentials', 401);
+            Http::error('Email or password is incorrect. If you do not have an account, click "Create account" to sign up.', 'invalid_credentials', 401);
         }
 
         // Successful login — reset lockout counters

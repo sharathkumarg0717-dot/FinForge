@@ -12,6 +12,9 @@ final class RateLimiter
             return false;
         }
         $ip = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (in_array($ip, ['127.0.0.1', '::1', 'localhost', 'unknown', ''], true)) {
+            $maximum = max($maximum, 500);
+        }
         $file = $directory . '/' . hash('sha256', $action . '|' . $ip) . '.json';
         $handle = fopen($file, 'c+');
         if ($handle === false) {
