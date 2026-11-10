@@ -129,6 +129,7 @@
     $('#page-crumb').textContent = screen[0].toUpperCase() + screen.slice(1).replace('-', ' ');
     $('#workspace-mode-label').textContent = (screen === 'personal-finance' || screen === 'transactions') ? 'PERSONAL DATA' : 'DEMO DATA';
     $('#sidebar').classList.remove('sidebar-open');
+    try { window.history.replaceState(null, '', `#${screen}`); } catch (e) {}
     if (screen === 'consent') refreshConsent();
     if (state.consent || screen === 'personal-finance' || screen === 'transactions') {
       const loaders = {
@@ -193,7 +194,10 @@
       showApp();
       showUser(result.user);
       updateConsentControls();
-      goTo('personal-finance');
+      const hashScreen = (location.hash || '').replace('#', '').trim();
+      const validScreens = ['personal-finance', 'overview', 'family', 'accounts', 'transactions', 'investments', 'reminders', 'advisor', 'payments', 'consent'];
+      const targetScreen = validScreens.includes(hashScreen) ? hashScreen : 'personal-finance';
+      goTo(targetScreen);
     } catch (error) {
       showAuth();
       $('#auth-message').textContent = error.message || 'Could not reach the local FinSync service.';
@@ -1431,11 +1435,14 @@
   }
 
   async function submitAdvisor(event) {
-    event.preventDefault();
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+    }
     const input = $('#advisor-question');
     const form = $('#advisor-form');
     const submitBtn = form ? $('button[type="submit"]', form) : null;
-    const question = input.value.trim();
+    const question = input ? input.value.trim() : '';
     if (!question) return;
     if (submitBtn) submitBtn.disabled = true;
     const messages = $('#chat-messages');
@@ -2039,7 +2046,20 @@
       else goTo('consent');
     } catch (error) { handleError(error); }
   });
-  $('#advisor-form').addEventListener('submit', submitAdvisor);
+  const triggerAdvisor = (event) => {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+    }
+    submitAdvisor(event);
+  };
+  $('#advisor-form')?.addEventListener('submit', triggerAdvisor);
+  $('#advisor-form button[type="submit"]')?.addEventListener('click', triggerAdvisor);
+  $('#advisor-question')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      triggerAdvisor(event);
+    }
+  });
   $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('sidebar-open'));
   $('#receipt-close').addEventListener('click', () => $('#receipt-dialog').close());
   $('#receipt-ok').addEventListener('click', () => $('#receipt-dialog').close());

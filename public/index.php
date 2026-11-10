@@ -263,7 +263,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
               </div>
               <button class="icon-button" id="finance-form-close" type="button" aria-label="Close form"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form id="finance-form" class="finance-form" novalidate>
+            <form id="finance-form" class="finance-form" onsubmit="return false;" novalidate>
               <input type="hidden" name="id">
               <label>Record month <span class="required-star">*</span>
                 <input name="month" type="month" required>
@@ -541,7 +541,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
               </div>
               <button class="icon-button" id="family-form-close" aria-label="Close form"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form id="family-form" class="inline-form">
+            <form id="family-form" class="inline-form" onsubmit="return false;">
               <label>Member name<input name="name" maxlength="120" placeholder="e.g. Priya Kumar" required></label>
               <label>Relationship
                 <select name="relationship" required>
@@ -1070,7 +1070,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
         <section class="screen" id="screen-advisor" hidden>
           <div class="page-heading"><div><p class="eyebrow">REAL-TIME FINANCIAL INTELLIGENCE</p><h1>AI insights</h1><p class="subtitle">Ask questions dynamically analyzed against your real financial metrics, portfolio, and expenses.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Real-Time AI</span></div>
-          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL INTELLIGENCE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s AI advisor dynamically analyzes your real income, expenses, category spending, and investment portfolio. It does not make trades or transfer funds.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Grounded in your real data</span><span><i class="fa-solid fa-check"></i> Clear data attribution</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync AI</h2><p>Live AI analysis grounded in your data</p></div><span class="online-indicator"><i></i> READY</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI</b><p>Hi <span id="advisor-name">there</span>! I can analyze your income, expenses, savings rate, portfolio, and category budgets. What would you like to explore?</p></div></div></div><div class="advisor-chips" id="advisor-chips"><button type="button" class="advisor-chip" data-query="Summarize my spending and savings rate this month"><i class="fa-solid fa-chart-pie"></i> Spending &amp; Savings</button><button type="button" class="advisor-chip" data-query="How is my multi-broker portfolio in Zerodha, Dhan and Groww doing?"><i class="fa-solid fa-arrow-trend-up"></i> Multi-Broker Portfolio</button><button type="button" class="advisor-chip" data-query="What is my emergency fund runway and debt exposure?"><i class="fa-solid fa-shield-halved"></i> Emergency Fund &amp; Debt</button><button type="button" class="advisor-chip" data-query="Give me a complete financial health audit and recommendations"><i class="fa-solid fa-stethoscope"></i> Full Health Audit</button></div><form id="advisor-form" class="chat-form"><label class="visually-hidden" for="advisor-question">Ask a question about your finances</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending and savings rate this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational analysis only—not financial, tax, investment, or legal advice. Verify critical decisions with a qualified professional.</p></article></div>
+          <div class="advisor-layout"><article class="panel advisor-intro"><div class="advisor-orb"><i class="fa-solid fa-sparkles"></i></div><p class="eyebrow">FINANCIAL INTELLIGENCE</p><h2>A little more context.<br>A little less guesswork.</h2><p>FinSync’s AI advisor dynamically analyzes your real income, expenses, category spending, and investment portfolio. It does not make trades or transfer funds.</p><div class="advisor-boundaries"><span><i class="fa-solid fa-check"></i> Grounded in your real data</span><span><i class="fa-solid fa-check"></i> Clear data attribution</span><span><i class="fa-solid fa-ban"></i> Never moves money</span></div></article><article class="panel chat-panel"><div class="panel-heading"><div><h2>Ask FinSync AI</h2><p>Live AI analysis grounded in your data</p></div><span class="online-indicator"><i></i> READY</span></div><div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-bubble assistant-bubble"><span class="chat-avatar"><i class="fa-solid fa-sparkles"></i></span><div><b>FinSync AI</b><p>Hi <span id="advisor-name">there</span>! I can analyze your income, expenses, savings rate, portfolio, and category budgets. What would you like to explore?</p></div></div></div><div class="advisor-chips" id="advisor-chips"><button type="button" class="advisor-chip" data-query="Summarize my spending and savings rate this month"><i class="fa-solid fa-chart-pie"></i> Spending &amp; Savings</button><button type="button" class="advisor-chip" data-query="How is my multi-broker portfolio in Zerodha, Dhan and Groww doing?"><i class="fa-solid fa-arrow-trend-up"></i> Multi-Broker Portfolio</button><button type="button" class="advisor-chip" data-query="What is my emergency fund runway and debt exposure?"><i class="fa-solid fa-shield-halved"></i> Emergency Fund &amp; Debt</button><button type="button" class="advisor-chip" data-query="Give me a complete financial health audit and recommendations"><i class="fa-solid fa-stethoscope"></i> Full Health Audit</button></div><form id="advisor-form" class="chat-form" onsubmit="return false;"><label class="visually-hidden" for="advisor-question">Ask a question about your finances</label><input id="advisor-question" name="question" maxlength="500" required placeholder="Try “Summarize my spending and savings rate this month”"><button class="primary-button" type="submit" aria-label="Send question"><i class="fa-solid fa-arrow-up"></i></button></form><p class="advisor-disclaimer"><i class="fa-solid fa-circle-info"></i> Informational analysis only—not financial, tax, investment, or legal advice. Verify critical decisions with a qualified professional.</p></article></div>
         </section>
 
         <section class="screen" id="screen-payments" hidden>
@@ -1090,14 +1090,14 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="receipt-dialog"><article><header><button aria-label="Close" rel="prev" id="receipt-close"></button><h2>Demo receipt created</h2></header><div id="receipt-content"></div><footer><button class="primary-button" id="receipt-ok">Done</button></footer></article></dialog>
-  <dialog id="google-modal" class="google-modal"><article><header><button aria-label="Close" rel="prev" id="google-modal-close"></button><h2><i class="fa-brands fa-google"></i> Sign in with Google</h2></header><form id="google-modal-form"><p class="modal-sub">Enter your Google account details to sign in or create your personal account.</p><label>Your Name<input type="text" name="google_name" placeholder="e.g. Alex Morgan" required autocomplete="name"></label><label>Google Email address<input type="email" name="google_email" placeholder="you@gmail.com" required autocomplete="email"></label><p id="google-modal-error" class="form-message error-text" role="status" aria-live="polite"></p><footer><button type="submit" id="google-modal-submit" class="primary-button full-button"><i class="fa-brands fa-google"></i> Continue with Google</button></footer></form></article></dialog>
+  <dialog id="google-modal" class="google-modal"><article><header><button aria-label="Close" rel="prev" id="google-modal-close"></button><h2><i class="fa-brands fa-google"></i> Sign in with Google</h2></header><form id="google-modal-form" onsubmit="return false;"><p class="modal-sub">Enter your Google account details to sign in or create your personal account.</p><label>Your Name<input type="text" name="google_name" placeholder="e.g. Alex Morgan" required autocomplete="name"></label><label>Google Email address<input type="email" name="google_email" placeholder="you@gmail.com" required autocomplete="email"></label><p id="google-modal-error" class="form-message error-text" role="status" aria-live="polite"></p><footer><button type="submit" id="google-modal-submit" class="primary-button full-button"><i class="fa-brands fa-google"></i> Continue with Google</button></footer></form></article></dialog>
   <dialog id="family-account-dialog" class="family-account-modal">
     <article>
       <header>
         <button aria-label="Close" rel="prev" id="family-account-dialog-close"></button>
         <h2><i class="fa-solid fa-wallet"></i> Link Demo Account</h2>
       </header>
-      <form id="family-account-form">
+      <form id="family-account-form" onsubmit="return false;">
         <p class="modal-sub">Add a synthetic bank, credit, loan, or investment account for <b id="family-account-member-name">Member</b>.</p>
         <input type="hidden" name="family_member_id" id="family-account-member-id" required>
         <label>Financial Institution
@@ -1150,7 +1150,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
       <!-- TAB 1: CLIENT ID & STOCKS -->
       <div id="tab-manual" class="zerodha-tab-content">
-        <form id="zerodha-manual-form">
+        <form id="zerodha-manual-form" onsubmit="return false;">
           <div class="form-row-2">
             <label>Zerodha Client ID
               <input type="text" name="client_id" placeholder="e.g. SK0717 or AB1234" value="SK0717" required>
@@ -1210,7 +1210,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
       <!-- TAB 2: CONSOLE CSV IMPORT -->
       <div id="tab-csv" class="zerodha-tab-content" hidden>
-        <form id="zerodha-csv-form">
+        <form id="zerodha-csv-form" onsubmit="return false;">
           <p class="modal-sub">Upload the holdings CSV export from <b>Zerodha Console</b> (Console → Portfolio → Holdings → Download CSV) or paste its contents below.</p>
           
           <label class="file-drop-area" id="zerodha-file-drop">
@@ -1235,7 +1235,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
 
       <!-- TAB 3: KITE CONNECT API -->
       <div id="tab-api" class="zerodha-tab-content" hidden>
-        <form id="zerodha-api-form">
+        <form id="zerodha-api-form" onsubmit="return false;">
           <p class="modal-sub">Direct sync via your personal <b>Zerodha Kite Connect Developer Credentials</b>.</p>
           
           <div class="form-row-2">
@@ -1299,7 +1299,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="add-holding-close"></button>
         <h2><i class="fa-solid fa-chart-line"></i> Add Stock Holding</h2>
       </header>
-      <form id="add-holding-form">
+      <form id="add-holding-form" onsubmit="return false;">
         <p class="modal-sub">Add an Indian equity, ETF, or mutual fund holding to your portfolio.</p>
         <label>Stock / Symbol
           <input type="text" name="symbol" placeholder="e.g. RELIANCE, TCS, INFY, TATAMOTORS, NIFTYBEES" required>
@@ -1344,7 +1344,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <h2 style="margin:0;">Connect DhanHQ Demat</h2>
         </div>
       </header>
-      <form id="dhan-connect-form">
+      <form id="dhan-connect-form" onsubmit="return false;">
         <p class="modal-sub">Link your Dhan investment account using official DhanHQ v2 API credentials. Tokens are encrypted server-side with AES-256-GCM.</p>
         <label>Dhan Client ID
           <input type="text" name="client_id" id="dhan-client-id-input" placeholder="e.g. 1000123456" required>
@@ -1373,7 +1373,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <h2 style="margin:0;">Import Groww Demat Statement</h2>
         </div>
       </header>
-      <form id="groww-import-form">
+      <form id="groww-import-form" onsubmit="return false;">
         <p class="modal-sub">Groww does not offer a public retail trading API. Upload or paste your official Groww Holdings CSV report to track all stocks &amp; mutual funds securely.</p>
         <div class="file-drop-area" id="groww-file-drop" style="margin-bottom:12px; padding:20px; border:2px dashed #00d09c; border-radius:10px; text-align:center; cursor:pointer;">
           <i class="fa-solid fa-cloud-arrow-up" style="font-size:26px; color:#00d09c; margin-bottom:8px; display:block;"></i>
@@ -1405,7 +1405,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           </div>
         </div>
       </header>
-      <form id="link-bank-form">
+      <form id="link-bank-form" onsubmit="return false;">
         <label>Select Your Bank
           <select name="bank_preset" id="bank-preset-select" required>
             <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
@@ -1472,7 +1472,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           </div>
         </div>
       </header>
-      <form id="bank-statement-form">
+      <form id="bank-statement-form" onsubmit="return false;">
         <label>Select Target Bank Account
           <select name="account_id" id="statement-account-select" required></select>
         </label>
@@ -1498,7 +1498,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="forgot-password-close"></button>
         <h2><i class="fa-solid fa-key"></i> Reset Your Password</h2>
       </header>
-      <form id="forgot-password-form">
+      <form id="forgot-password-form" onsubmit="return false;">
         <p class="modal-sub">Enter the email address associated with your account. A secure reset token will be generated.</p>
         <label>Account Email
           <input type="email" name="email" id="forgot-email-input" placeholder="you@example.com" required>
@@ -1528,7 +1528,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="reset-password-close"></button>
         <h2><i class="fa-solid fa-lock"></i> Set New Password</h2>
       </header>
-      <form id="reset-password-form">
+      <form id="reset-password-form" onsubmit="return false;">
         <p class="modal-sub">Enter your email, reset token, and your new password.</p>
         <label>Account Email
           <input type="email" name="email" id="reset-email-input" placeholder="you@example.com" required>
@@ -1557,7 +1557,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="expense-modal-close"></button>
         <h2 id="expense-modal-title"><i class="fa-solid fa-receipt"></i> Add Transaction</h2>
       </header>
-      <form id="expense-entry-form">
+      <form id="expense-entry-form" onsubmit="return false;">
         <input type="hidden" name="id" id="expense-edit-id">
         <div style="display: flex; gap: 8px; margin-bottom: 14px;">
           <button type="button" class="outline-button small-button tx-type-btn active" data-type="expense" id="tx-type-expense-btn" style="flex: 1;"><i class="fa-solid fa-arrow-up-long" style="color:#ef4444;"></i> Expense</button>
@@ -1632,7 +1632,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="expense-csv-close"></button>
         <h2><i class="fa-solid fa-file-csv"></i> Import Transactions via CSV</h2>
       </header>
-      <form id="expense-csv-form">
+      <form id="expense-csv-form" onsubmit="return false;">
         <p class="modal-sub">Import bank statements or expense sheets. FinSync automatically detects headers (Date, Amount, Category, Description) and flags duplicate entries.</p>
         
         <label>Select CSV file
@@ -1661,7 +1661,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         <button aria-label="Close" rel="prev" id="budget-modal-close"></button>
         <h2><i class="fa-solid fa-bullseye"></i> Monthly Category Budgets</h2>
       </header>
-      <form id="budget-form">
+      <form id="budget-form" onsubmit="return false;">
         <p class="modal-sub">Set monthly spending limits for expense categories. FinSync alerts you when spending reaches 85% and warns when exceeded.</p>
         
         <div class="form-row-2">
