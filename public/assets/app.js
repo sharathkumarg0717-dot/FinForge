@@ -784,10 +784,90 @@
 
   async function loadAccounts() {
     state.accounts = await api('/api/accounts');
-    const totals = {};
-    state.accounts.forEach((account) => { totals[account.account_type] = (totals[account.account_type] || 0) + 1; });
-    $('#account-summary').innerHTML = Object.entries(totals).map(([type, count]) => `<article class="stat-card mini-stat"><div class="stat-top"><span class="stat-label">${esc(type[0].toUpperCase() + type.slice(1))} accounts</span><span class="stat-icon blue-icon"><i class="fa-solid ${icons[type] || 'fa-wallet'}"></i></span></div><div class="stat-value">${count}</div><div class="stat-foot"><span class="tiny-note">Mock adapter</span></div></article>`).join('');
-    $('#accounts-table').innerHTML = state.accounts.map((account) => `<tr><td><span class="institution-cell"><span class="account-icon"><i class="fa-solid ${icons[account.account_type] || 'fa-wallet'}"></i></span><span><b>${esc(account.institution)}</b><small>Mock provider</small></span></span></td><td>${esc(account.member_name)}</td><td><span class="type-chip">${esc(account.account_type)}</span></td><td class="masked">${esc(account.masked_number)}</td><td class="align-right"><b class="${Number(account.balance) < 0 ? 'amount-expense' : ''}">${money(account.balance)}</b></td></tr>`).join('');
+    let totalBal = 0;
+    let savingsBal = 0;
+    let currentBal = 0;
+    let liabilities = 0;
+
+    state.accounts.forEach((account) => {
+      const b = Number(account.balance) || 0;
+      if (['credit', 'loan'].includes(account.account_type)) {
+        liabilities += Math.abs(b);
+      } else {
+        totalBal += b;
+        if (account.account_type === 'savings') savingsBal += b;
+        else currentBal += b;
+      }
+    });
+
+    $('#account-summary').innerHTML = `
+      <article class="stat-card mini-stat">
+        <div class="stat-top"><span class="stat-label">Total Liquid Balance</span><span class="stat-icon green-icon"><i class="fa-solid fa-building-columns"></i></span></div>
+        <div class="stat-value">${money(totalBal)}</div>
+        <div class="stat-foot"><span class="tiny-note">${state.accounts.filter(a => !['credit','loan'].includes(a.account_type)).length} bank accounts</span></div>
+      </article>
+      <article class="stat-card mini-stat">
+        <div class="stat-top"><span class="stat-label">Savings Accounts</span><span class="stat-icon blue-icon"><i class="fa-solid fa-piggy-bank"></i></span></div>
+        <div class="stat-value">${money(savingsBal)}</div>
+        <div class="stat-foot"><span class="tiny-note">Instant liquidity</span></div>
+      </article>
+      <article class="stat-card mini-stat">
+        <div class="stat-top"><span class="stat-label">Current / Salary</span><span class="stat-icon orange-icon"><i class="fa-solid fa-wallet"></i></span></div>
+        <div class="stat-value">${money(currentBal)}</div>
+        <div class="stat-foot"><span class="tiny-note">Cash flow operating</span></div>
+      </article>
+      <article class="stat-card mini-stat">
+        <div class="stat-top"><span class="stat-label">Total Liabilities</span><span class="stat-icon red-icon"><i class="fa-solid fa-credit-card"></i></span></div>
+        <div class="stat-value amount-expense">${money(liabilities)}</div>
+        <div class="stat-foot"><span class="tiny-note">Credit cards &amp; loans</span></div>
+      </article>
+    `;
+
+    $('#accounts-table').innerHTML = state.accounts.map((account) => {
+      const isReal = !Number(account.is_demo);
+      const isDebt = ['credit', 'loan'].includes(account.account_type);
+      return `
+        <tr>
+          <td>
+            <span class="institution-cell">
+              <span class="account-icon" style="background:${isReal ? '#e0f2fe' : '#f1f5f9'}; color:${isReal ? '#0284c7' : '#64748b'};">
+                <i class="fa-solid ${icons[account.account_type] || 'fa-building-columns'}"></i>
+              </span>
+              <span>
+                <b>${esc(account.institution)}</b>
+                <small style="color:${isReal ? '#059669' : '#64748b'}; font-weight:600;">${isReal ? 'Verified Real Bank' : 'Simulated account'}</small>
+              </span>
+            </span>
+          </td>
+          <td><b>${esc(account.member_name || 'Self')}</b></td>
+          <td><span class="type-chip">${esc(account.account_type)}</span></td>
+          <td class="masked"><code style="background:#f8fafc; padding:2px 6px; border-radius:4px; font-weight:600;">${esc(account.masked_number)}</code></td>
+          <td><span style="font-size:11.5px; color:#64748b; font-family:monospace;">${esc(account.client_id || '—')}</span></td>
+          <td class="align-right"><b class="${isDebt || Number(account.balance) < 0 ? 'amount-expense' : 'amount-income'}" style="font-size:14px;">${money(account.balance)}</b></td>
+          <td>
+            <span class="status-chip ${isReal ? 'success-chip' : 'neutral-chip'}">
+              <i class="fa-solid ${isReal ? 'fa-circle-check' : 'fa-flask'}"></i> ${isReal ? 'Active' : 'Demo'}
+            </span>
+          </td>
+          <td class="align-right">
+            <div style="display:inline-flex; gap:6px;">
+              <button class="outline-button small-button import-statement-btn" data-id="${Number(account.id)}" data-name="${esc(account.institution)}" title="Import statement CSV" style="padding:4px 8px; font-size:11px;">
+                <i class="fa-solid fa-file-invoice-dollar"></i> Statement
+              </button>
+              <button class="icon-button delete-account-btn" data-id="${Number(account.id)}" data-name="${esc(account.institution)}" title="Unlink account" style="color:#ef4444;">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Also populate statement account select
+    const stSelect = $('#statement-account-select');
+    if (stSelect) {
+      stSelect.innerHTML = state.accounts.map(a => `<option value="${Number(a.id)}">${esc(a.institution)} (${esc(a.masked_number)}) - ${money(a.balance)}</option>`).join('');
+    }
   }
 
   // --- PHASE 2: EXPENSES, INCOME & BUDGET MODULE ---
@@ -2598,7 +2678,155 @@
     }
   });
 
-  document.addEventListener('keydown', (event) => {
+  // --- Real Bank Account Handlers ---
+
+  // Open Link Bank Modal
+  $('#open-link-bank-modal-btn')?.addEventListener('click', () => {
+    $('#link-bank-form')?.reset();
+    if ($('#link-bank-error')) $('#link-bank-error').textContent = '';
+    if ($('#custom-bank-group')) $('#custom-bank-group').hidden = true;
+    $('#link-bank-modal')?.showModal();
+  });
+  $('#link-bank-modal-close')?.addEventListener('click', () => $('#link-bank-modal')?.close());
+
+  // Toggle Custom Bank Input
+  $('#bank-preset-select')?.addEventListener('change', (e) => {
+    const isOther = e.target.value === 'other';
+    const grp = $('#custom-bank-group');
+    if (grp) grp.hidden = !isOther;
+    if (isOther) $('#custom-bank-name')?.focus();
+  });
+
+  // Submit Link Real Bank Account
+  $('#link-bank-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const preset = form.bank_preset?.value;
+    const custom = (form.custom_institution?.value || '').trim();
+    const institution = preset === 'other' ? (custom || 'Bank Account') : preset;
+    const account_type = form.account_type?.value || 'savings';
+    const account_number = (form.account_number?.value || '').trim();
+    const ifsc_code = (form.ifsc_code?.value || '').trim().toUpperCase();
+    const balance = parseFloat(form.balance?.value) || 0.0;
+    const errEl = $('#link-bank-error');
+    const submitBtn = $('#link-bank-submit');
+
+    if (errEl) errEl.textContent = '';
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      await api('/api/accounts', {
+        method: 'POST',
+        body: {
+          institution,
+          account_type,
+          account_number,
+          ifsc_code,
+          balance,
+          is_demo: 0,
+          provider_key: 'real_bank'
+        }
+      });
+      $('#link-bank-modal')?.close();
+      toast(`Successfully linked ${institution}!`);
+      await loadAccounts();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not link bank account.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Open Bank Statement Modal
+  $('#open-bank-statement-modal-btn')?.addEventListener('click', () => {
+    $('#bank-statement-form')?.reset();
+    if ($('#bank-statement-error')) $('#bank-statement-error').textContent = '';
+    $('#bank-statement-modal')?.showModal();
+  });
+  $('#bank-statement-modal-close')?.addEventListener('click', () => $('#bank-statement-modal')?.close());
+
+  // Bank Statement File drop & select
+  const bankDrop = $('#bank-file-drop');
+  const bankFileInput = $('#bank-statement-file');
+  bankDrop?.addEventListener('click', () => bankFileInput?.click());
+  bankFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (re) => {
+        if ($('#bank-csv-text')) $('#bank-csv-text').value = re.target.result;
+        toast(`Loaded statement: ${file.name}`);
+      };
+      reader.readAsText(file);
+    }
+  });
+
+  // Submit Bank Statement Form
+  $('#bank-statement-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const accountId = form.account_id?.value;
+    const csvContent = (form.csv_content?.value || '').trim();
+    const errEl = $('#bank-statement-error');
+    const submitBtn = $('#bank-statement-submit');
+
+    if (!accountId) {
+      if (errEl) errEl.textContent = 'Please select a bank account to import into.';
+      return;
+    }
+    if (!csvContent) {
+      if (errEl) errEl.textContent = 'Please choose a CSV file or paste statement text.';
+      return;
+    }
+    if (errEl) errEl.textContent = '';
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await api(`/api/accounts/${accountId}/statement`, {
+        method: 'POST',
+        body: { csv_content: csvContent }
+      });
+      $('#bank-statement-modal')?.close();
+      toast(`Imported ${res.imported_count || 0} transactions! New balance: ${money(res.new_balance)}`);
+      await loadAccounts();
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Failed to import bank statement.';
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+
+  // Table Delegations: Delete Account and Quick Statement
+  $('#accounts-table')?.addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('.delete-account-btn');
+    if (delBtn) {
+      const id = delBtn.dataset.id;
+      const name = delBtn.dataset.name || 'this account';
+      if (!window.confirm(`Unlink ${name}? All associated records will be removed.`)) return;
+      try {
+        await api(`/api/accounts/${id}`, { method: 'DELETE', body: {} });
+        toast(`Unlinked ${name}.`);
+        await loadAccounts();
+      } catch (err) {
+        handleError(err);
+      }
+      return;
+    }
+
+    const stBtn = e.target.closest('.import-statement-btn');
+    if (stBtn) {
+      const id = stBtn.dataset.id;
+      const stSelect = $('#statement-account-select');
+      if (stSelect) stSelect.value = id;
+      $('#bank-statement-modal')?.showModal();
+    }
+  });
+
+  // Refresh Accounts Button
+  $('#refresh-accounts-btn')?.addEventListener('click', async () => {
+    await loadAccounts();
+    toast('Bank accounts refreshed.');
+  });
     if (event.key === 'Escape') $('#sidebar').classList.remove('sidebar-open');
   });
 

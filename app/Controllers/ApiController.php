@@ -242,22 +242,43 @@ final class ApiController
             Http::json(['data' => $this->finance->dashboard($userId)]);
         }
         if ($path === '/api/accounts' && $method === 'GET') {
-            $this->requireConsent($userId);
             Http::json(['data' => $this->finance->accountList($userId)]);
         }
         if ($path === '/api/accounts' && $method === 'POST') {
-            $this->requireConsent($userId);
+            Security::requireCsrf();
             $body = Http::body();
-            $memberId = (int)($body['family_member_id'] ?? 0);
-            if ($memberId <= 0) {
-                Http::error('Choose a valid family member for this account.');
-            }
             try {
                 $accountId = $this->finance->createAccount($userId, $body);
-                $this->audit($userId, 'account.created', 'financial_account', $accountId);
+                $this->audit($userId, 'account.created', 'financial_account', $accountId, ['institution' => $body['institution'] ?? '']);
                 Http::json(['data' => ['id' => $accountId, 'success' => true]], 201);
             } catch (\InvalidArgumentException $e) {
                 Http::error($e->getMessage(), 'invalid_input', 400);
+            }
+        }
+        if (preg_match('#^/api/accounts/(\d+)$#', $path, $m) && $method === 'DELETE') {
+            Security::requireCsrf();
+            $accId = (int)$m[1];
+            $deleted = $this->finance->deleteAccount($userId, $accId);
+            if (!$deleted) {
+                Http::error('Account not found.', 'not_found', 404);
+            }
+            $this->audit($userId, 'account.deleted', 'financial_account', $accId);
+            Http::json(['data' => ['success' => true]]);
+        }
+        if (preg_match('#^/api/accounts/(\d+)/statement$#', $path, $m) && $method === 'POST') {
+            Security::requireCsrf();
+            $accId = (int)$m[1];
+            $body = Http::body();
+            $csv = (string)($body['csv_content'] ?? '');
+            if (trim($csv) === '') {
+                Http::error('Bank statement content is required.');
+            }
+            try {
+                $res = $this->finance->importBankStatement($userId, $accId, $csv);
+                $this->audit($userId, 'account.statement_imported', 'financial_account', $accId, $res);
+                Http::json(['data' => $res]);
+            } catch (\Throwable $e) {
+                Http::error($e->getMessage(), 'statement_import_failed', 400);
             }
         }
         if ($path === '/api/transactions' && $method === 'GET') {

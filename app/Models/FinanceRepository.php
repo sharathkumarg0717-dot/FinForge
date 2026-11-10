@@ -235,10 +235,11 @@ final class FinanceRepository
     public function accountList(int $userId): array
     {
         $statement = $this->db->prepare(
-            'SELECT a.id, a.family_member_id, a.institution, a.account_type, a.masked_number, a.balance, a.currency, a.last_synced_at, '
+            'SELECT a.id, a.family_member_id, a.institution, a.account_type, a.masked_number, a.client_id, a.balance, a.currency, a.provider_key, a.is_demo, a.last_synced_at, '
             . 'm.name AS member_name FROM financial_accounts a '
             . 'JOIN family_members m ON m.id = a.family_member_id AND m.user_id = a.user_id '
-            . 'WHERE a.user_id = :user_id AND a.status = "active" AND m.status = "active" ORDER BY a.account_type, a.institution'
+            . 'WHERE a.user_id = :user_id AND a.status = "active" AND m.status = "active" '
+            . 'ORDER BY a.is_demo ASC, a.balance DESC'
         );
         $statement->execute(['user_id' => $userId]);
         return $statement->fetchAll();
@@ -540,46 +541,213 @@ final class FinanceRepository
 
     public function createAccount(int $userId, array $data): int
     {
-        $memberId = (int)$data['family_member_id'];
+        $memberId = (int)($data['family_member_id'] ?? 0);
+        if ($memberId <= 0) {
+            $memberId = $this->getOrCreateSelfMember($userId);
+        }
         $check = $this->db->prepare('SELECT id FROM family_members WHERE id = :id AND user_id = :user_id');
         $check->execute(['id' => $memberId, 'user_id' => $userId]);
         if (!$check->fetchColumn()) {
-            throw new \InvalidArgumentException('Family member does not exist.');
+            $memberId = $this->getOrCreateSelfMember($userId);
         }
 
-        $institution = trim((string)($data['institution'] ?? 'Demo Bank'));
+        $institution = trim((string)($data['institution'] ?? 'HDFC Bank'));
         if ($institution === '') {
-            $institution = 'Demo Bank';
+            $institution = 'HDFC Bank';
         }
         $accountType = trim((string)($data['account_type'] ?? 'savings'));
         if (!in_array($accountType, ['checking', 'savings', 'credit', 'investment', 'loan', 'wallet'], true)) {
             $accountType = 'savings';
         }
-        $masked = trim((string)($data['masked_number'] ?? ''));
-        if ($masked === '') {
-            $masked = '•••• ' . str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
-        } elseif (!str_starts_with($masked, '•')) {
-            $last4 = substr(preg_replace('/\D/', '', $masked), -4);
-            $masked = '•••• ' . ($last4 ?: str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT));
-        }
+        $accountNumber = trim((string)($data['account_number'] ?? ($data['masked_number'] ?? '')));
+        $cleanNum = preg_replace('/\D/', '', $accountNumber);
+        $last4 = substr($cleanNum, -4);
+        $masked = $last4 !== '' ? '•••• ' . $last4 : '•••• ' . str_pad((string)random_int(1000, 9999), 4, '0', STR_PAD_LEFT);
+
+        $clientId = trim((string)($data['client_id'] ?? ($data['ifsc_code'] ?? '')));
         $balance = (float)($data['balance'] ?? 0.0);
         if (in_array($accountType, ['credit', 'loan'], true) && $balance > 0) {
             $balance = -$balance;
         }
+        $providerKey = trim((string)($data['provider_key'] ?? 'real_bank'));
+        $isDemo = isset($data['is_demo']) ? (int)(bool)$data['is_demo'] : 0;
 
         $statement = $this->db->prepare(
-            'INSERT INTO financial_accounts (user_id, family_member_id, provider_key, institution, account_type, masked_number, balance, currency, last_synced_at, is_demo) '
-            . 'VALUES (:user_id, :member_id, "manual", :institution, :account_type, :masked_number, :balance, "INR", NOW(), 0)'
+            'INSERT INTO financial_accounts (user_id, family_member_id, provider_key, institution, account_type, masked_number, client_id, balance, currency, last_synced_at, is_demo) '
+            . 'VALUES (:user_id, :member_id, :provider, :institution, :account_type, :masked_number, :client_id, :balance, "INR", NOW(), :is_demo)'
         );
         $statement->execute([
             'user_id' => $userId,
             'member_id' => $memberId,
+            'provider' => $providerKey,
             'institution' => $institution,
             'account_type' => $accountType,
             'masked_number' => $masked,
+            'client_id' => $clientId ?: null,
             'balance' => $balance,
+            'is_demo' => $isDemo,
         ]);
         return (int)$this->db->lastInsertId();
+    }
+
+    public function deleteAccount(int $userId, int $accountId): bool
+    {
+        $stmt = $this->db->prepare('DELETE FROM financial_accounts WHERE id = :id AND user_id = :user_id');
+        $stmt->execute(['id' => $accountId, 'user_id' => $userId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function importBankStatement(int $userId, int $accountId, string $csvContent): array
+    {
+        $chk = $this->db->prepare('SELECT id, institution, balance FROM financial_accounts WHERE id = :id AND user_id = :user_id');
+        $chk->execute(['id' => $accountId, 'user_id' => $userId]);
+        $acc = $chk->fetch();
+        if (!$acc) {
+            throw new \InvalidArgumentException('Bank account not found.');
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', trim($csvContent));
+        if (empty($lines)) {
+            throw new \RuntimeException('Statement file is empty.');
+        }
+
+        $header = null;
+        $importedCount = 0;
+        $totalDeposits = 0.0;
+        $totalWithdrawals = 0.0;
+        $lastBalance = null;
+
+        $txStmt = $this->db->prepare('
+            INSERT INTO expenses (user_id, type, amount, category, payment_method, transaction_date, notes, source) 
+            VALUES (:user_id, :type, :amount, :category, "net_banking", :tx_date, :notes, "bank")
+        ');
+
+        foreach ($lines as $line) {
+            $row = str_getcsv($line);
+            if (empty($row) || count(array_filter($row)) === 0) continue;
+
+            if ($header === null) {
+                $norm = array_map(static fn($c) => strtolower(trim((string)$c)), $row);
+                $dateIdx = null;
+                $narrationIdx = null;
+                $debitIdx = null;
+                $creditIdx = null;
+                $balanceIdx = null;
+
+                foreach ($norm as $idx => $col) {
+                    if (str_contains($col, 'date') || str_contains($col, 'txn date') || str_contains($col, 'value date')) {
+                        $dateIdx = $idx;
+                    } elseif (str_contains($col, 'narration') || str_contains($col, 'description') || str_contains($col, 'particulars') || str_contains($col, 'remarks')) {
+                        $narrationIdx = $idx;
+                    } elseif (str_contains($col, 'withdrawal') || str_contains($col, 'debit') || str_contains($col, 'dr')) {
+                        $debitIdx = $idx;
+                    } elseif (str_contains($col, 'deposit') || str_contains($col, 'credit') || str_contains($col, 'cr')) {
+                        $creditIdx = $idx;
+                    } elseif (str_contains($col, 'balance') || str_contains($col, 'closing')) {
+                        $balanceIdx = $idx;
+                    }
+                }
+
+                if ($dateIdx !== null && ($debitIdx !== null || $creditIdx !== null)) {
+                    $header = [
+                        'date' => $dateIdx,
+                        'narration' => $narrationIdx,
+                        'debit' => $debitIdx,
+                        'credit' => $creditIdx,
+                        'balance' => $balanceIdx,
+                    ];
+                }
+                continue;
+            }
+
+            $rawDate = trim((string)($row[$header['date']] ?? ''));
+            $timestamp = strtotime($rawDate);
+            if (!$timestamp) {
+                $d = \DateTime::createFromFormat('d/m/Y', $rawDate) ?: \DateTime::createFromFormat('d-m-Y', $rawDate);
+                $timestamp = $d ? $d->getTimestamp() : null;
+            }
+            if (!$timestamp) continue;
+            $txDate = date('Y-m-d', $timestamp);
+
+            $narration = $header['narration'] !== null ? trim((string)($row[$header['narration']] ?? '')) : 'Bank Transaction';
+            $debitRaw = $header['debit'] !== null ? preg_replace('/[^\d.]/', '', (string)($row[$header['debit']] ?? 0)) : '';
+            $creditRaw = $header['credit'] !== null ? preg_replace('/[^\d.]/', '', (string)($row[$header['credit']] ?? 0)) : '';
+            $debit = (float)$debitRaw;
+            $credit = (float)$creditRaw;
+
+            if ($header['balance'] !== null) {
+                $bRaw = preg_replace('/[^\d.]/', '', (string)($row[$header['balance']] ?? ''));
+                if ($bRaw !== '') {
+                    $lastBalance = (float)$bRaw;
+                }
+            }
+
+            if ($debit > 0) {
+                $category = 'Other expense';
+                $nLower = strtolower($narration);
+                if (str_contains($nLower, 'swiggy') || str_contains($nLower, 'zomato') || str_contains($nLower, 'restaurant') || str_contains($nLower, 'food') || str_contains($nLower, 'cafe')) {
+                    $category = 'Food';
+                } elseif (str_contains($nLower, 'amazon') || str_contains($nLower, 'flipkart') || str_contains($nLower, 'myntra') || str_contains($nLower, 'store') || str_contains($nLower, 'retail')) {
+                    $category = 'Shopping';
+                } elseif (str_contains($nLower, 'uber') || str_contains($nLower, 'ola') || str_contains($nLower, 'fuel') || str_contains($nLower, 'petrol') || str_contains($nLower, 'metro')) {
+                    $category = 'Transport';
+                } elseif (str_contains($nLower, 'rent') || str_contains($nLower, 'house') || str_contains($nLower, 'flat')) {
+                    $category = 'Rent';
+                } elseif (str_contains($nLower, 'electricity') || str_contains($nLower, 'bill') || str_contains($nLower, 'airtel') || str_contains($nLower, 'jio') || str_contains($nLower, 'bescom')) {
+                    $category = 'Utilities';
+                } elseif (str_contains($nLower, 'hospital') || str_contains($nLower, 'pharmacy') || str_contains($nLower, 'med') || str_contains($nLower, 'apollo')) {
+                    $category = 'Healthcare';
+                }
+
+                $txStmt->execute([
+                    'user_id' => $userId,
+                    'type' => 'expense',
+                    'amount' => $debit,
+                    'category' => $category,
+                    'tx_date' => $txDate,
+                    'notes' => $narration . ' (' . $acc['institution'] . ')',
+                ]);
+                $importedCount++;
+                $totalWithdrawals += $debit;
+            } elseif ($credit > 0) {
+                $category = 'Other income';
+                $nLower = strtolower($narration);
+                if (str_contains($nLower, 'salary') || str_contains($nLower, 'payroll') || str_contains($nLower, 'wages')) {
+                    $category = 'Salary';
+                } elseif (str_contains($nLower, 'interest') || str_contains($nLower, 'dividend') || str_contains($nLower, 'zerodha') || str_contains($nLower, 'groww') || str_contains($nLower, 'dhan')) {
+                    $category = 'Investments';
+                }
+
+                $txStmt->execute([
+                    'user_id' => $userId,
+                    'type' => 'income',
+                    'amount' => $credit,
+                    'category' => $category,
+                    'tx_date' => $txDate,
+                    'notes' => $narration . ' (' . $acc['institution'] . ')',
+                ]);
+                $importedCount++;
+                $totalDeposits += $credit;
+            }
+        }
+
+        $newBalance = (float)$acc['balance'];
+        if ($lastBalance !== null && $lastBalance >= 0) {
+            $newBalance = $lastBalance;
+        } else {
+            $newBalance += ($totalDeposits - $totalWithdrawals);
+        }
+
+        $upStmt = $this->db->prepare('UPDATE financial_accounts SET balance = :balance, last_synced_at = NOW() WHERE id = :id');
+        $upStmt->execute(['balance' => $newBalance, 'id' => $accountId]);
+
+        return [
+            'imported_count' => $importedCount,
+            'total_deposits' => round($totalDeposits, 2),
+            'total_withdrawals' => round($totalWithdrawals, 2),
+            'new_balance' => round($newBalance, 2),
+            'institution' => $acc['institution'],
+        ];
     }
 
     public function holdings(int $userId): array

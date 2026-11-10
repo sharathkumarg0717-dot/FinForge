@@ -716,8 +716,46 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
         </section>
 
         <section class="screen" id="screen-accounts" hidden>
-          <div class="page-heading"><div><p class="eyebrow">SYNTHETIC PROVIDER CONNECTIONS</p><h1>Accounts</h1><p class="subtitle">A normalized view of mock bank, investment, credit, loan, and wallet data.</p></div><span class="status-chip info-chip"><i class="fa-solid fa-flask"></i> Mock adapters only</span></div>
-          <div class="stat-grid compact-stats" id="account-summary"></div><article class="panel"><div class="panel-heading"><div><h2>Household accounts</h2><p>Account references are masked; no provider credentials are stored.</p></div><span class="period-tag">LOCAL DEMO</span></div><div class="table-wrap"><table><thead><tr><th>INSTITUTION</th><th>MEMBER</th><th>TYPE</th><th>ACCOUNT</th><th class="align-right">BALANCE</th></tr></thead><tbody id="accounts-table"></tbody></table></div></article>
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">INDIAN &amp; GLOBAL BANKING <span class="live-dot"></span> LIVE ACCOUNTS</p>
+              <h1>Bank Accounts &amp; Assets</h1>
+              <p class="subtitle">Link and monitor your real Savings, Salary, Current, and Credit accounts in Indian Rupees (₹).</p>
+            </div>
+            <div class="page-heading-actions">
+              <button class="primary-button" id="open-link-bank-modal-btn" type="button"><i class="fa-solid fa-building-columns"></i> Link Real Bank Account</button>
+              <button class="outline-button" id="open-bank-statement-modal-btn" type="button"><i class="fa-solid fa-file-invoice-dollar"></i> Import Statement</button>
+            </div>
+          </div>
+
+          <div class="stat-grid compact-stats" id="account-summary"></div>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Connected Bank Accounts</h2>
+                <p>Real and linked household accounts. Account numbers are securely masked.</p>
+              </div>
+              <button class="outline-button small-button" id="refresh-accounts-btn" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>INSTITUTION / BANK</th>
+                    <th>ACCOUNT HOLDER</th>
+                    <th>TYPE</th>
+                    <th>ACCOUNT NUMBER</th>
+                    <th>IFSC / REF</th>
+                    <th class="align-right">BALANCE</th>
+                    <th>STATUS</th>
+                    <th class="align-right">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="accounts-table"></tbody>
+              </table>
+            </div>
+          </article>
         </section>
 
         <section class="screen" id="screen-transactions" hidden>
@@ -1349,7 +1387,107 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
       </form>
     </article>
   </dialog>
-  <!-- FORGOT PASSWORD MODAL -->
+
+  <!-- LINK REAL BANK ACCOUNT MODAL -->
+  <dialog id="link-bank-modal" class="family-account-modal">
+    <article style="max-width: 580px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="link-bank-modal-close"></button>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="account-icon" style="background:#e0e7ff; color:#4338ca; width:38px; height:38px; border-radius:10px; display:grid; place-items:center; font-size:18px;"><i class="fa-solid fa-building-columns"></i></span>
+          <div>
+            <h2 style="margin:0;">Link Real Bank Account</h2>
+            <p class="modal-sub" style="margin:2px 0 0;">Add your actual Indian or international bank account.</p>
+          </div>
+        </div>
+      </header>
+      <form id="link-bank-form">
+        <label>Select Your Bank
+          <select name="bank_preset" id="bank-preset-select" required>
+            <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
+            <option value="HDFC Bank" selected>HDFC Bank</option>
+            <option value="ICICI Bank">ICICI Bank</option>
+            <option value="Axis Bank">Axis Bank</option>
+            <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+            <option value="Punjab National Bank (PNB)">Punjab National Bank (PNB)</option>
+            <option value="Bank of Baroda">Bank of Baroda</option>
+            <option value="Canara Bank">Canara Bank</option>
+            <option value="IndusInd Bank">IndusInd Bank</option>
+            <option value="IDFC FIRST Bank">IDFC FIRST Bank</option>
+            <option value="Union Bank of India">Union Bank of India</option>
+            <option value="other">Other Indian / International Bank</option>
+          </select>
+        </label>
+        <label id="custom-bank-group" hidden>Bank / Institution Name
+          <input type="text" name="custom_institution" id="custom-bank-name" placeholder="e.g. Federal Bank, Standard Chartered">
+        </label>
+        <div class="form-row-2">
+          <label>Account Type
+            <select name="account_type" required>
+              <option value="savings" selected>Savings Account</option>
+              <option value="checking">Current / Salary Account</option>
+              <option value="credit">Credit Card</option>
+              <option value="loan">Home / Personal Loan</option>
+              <option value="wallet">Digital Wallet / Pre-paid</option>
+            </select>
+          </label>
+          <label>Current Available Balance (₹)
+            <input type="number" step="0.01" name="balance" placeholder="e.g. 75000.00" value="0.00" required>
+          </label>
+        </div>
+        <div class="form-row-2">
+          <label>Bank Account Number
+            <input type="text" name="account_number" placeholder="e.g. 50100123456789" required autocomplete="off">
+            <small style="color:#64748b; font-size:11px;">Masked securely on save (•••• 6789)</small>
+          </label>
+          <label>IFSC Code (Optional)
+            <input type="text" name="ifsc_code" placeholder="e.g. HDFC0001234" maxlength="11" style="text-transform:uppercase;">
+          </label>
+        </div>
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; margin:10px 0; font-size:12px; color:#166534;">
+          <i class="fa-solid fa-shield-halved"></i> <b>Zero credential exposure:</b> FinSync never asks for your NetBanking password, debit card PIN, or OTP.
+        </div>
+        <p id="link-bank-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="link-bank-submit" class="primary-button full-button"><i class="fa-solid fa-link"></i> Link Real Bank Account</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
+
+  <!-- BANK STATEMENT IMPORT MODAL -->
+  <dialog id="bank-statement-modal" class="family-account-modal">
+    <article style="max-width: 600px;">
+      <header>
+        <button aria-label="Close" rel="prev" id="bank-statement-modal-close"></button>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="account-icon" style="background:#ecfdf5; color:#059669; width:38px; height:38px; border-radius:10px; display:grid; place-items:center; font-size:18px;"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+          <div>
+            <h2 style="margin:0;">Import Bank Statement</h2>
+            <p class="modal-sub" style="margin:2px 0 0;">Upload your official bank statement CSV to sync transactions &amp; update balance.</p>
+          </div>
+        </div>
+      </header>
+      <form id="bank-statement-form">
+        <label>Select Target Bank Account
+          <select name="account_id" id="statement-account-select" required></select>
+        </label>
+        <div class="file-drop-area" id="bank-file-drop" style="margin-bottom:12px; padding:20px; border:2px dashed #3b82f6; border-radius:10px; text-align:center; cursor:pointer;">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size:26px; color:#3b82f6; margin-bottom:8px; display:block;"></i>
+          <b>Choose Statement CSV File</b><br>
+          <span style="font-size:11px; color:#64748b;">(Downloaded from NetBanking or mobile banking app)</span>
+          <input type="file" id="bank-statement-file" accept=".csv" style="display:none;">
+        </div>
+        <label>Or Paste CSV Contents
+          <textarea name="csv_content" id="bank-csv-text" rows="5" placeholder="Date, Narration, Withdrawal, Deposit, Balance..." style="font-family:monospace; font-size:11.5px;"></textarea>
+        </label>
+        <p id="bank-statement-error" class="form-message error-text" role="status" aria-live="polite"></p>
+        <footer>
+          <button type="submit" id="bank-statement-submit" class="primary-button full-button"><i class="fa-solid fa-file-import"></i> Sync Bank Statement</button>
+        </footer>
+      </form>
+    </article>
+  </dialog>
   <dialog id="forgot-password-modal" class="family-account-modal">
     <article>
       <header>
