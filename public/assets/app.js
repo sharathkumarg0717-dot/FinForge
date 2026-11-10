@@ -2847,6 +2847,8 @@
     await loadAccounts();
     toast('Bank accounts refreshed.');
   });
+
+  document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') $('#sidebar').classList.remove('sidebar-open');
   });
 

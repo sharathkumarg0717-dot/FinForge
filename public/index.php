@@ -137,7 +137,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$
           <button type="button" class="auth-tab active" data-auth-mode="login" role="tab" aria-selected="true">Sign in</button>
           <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">Create account</button>
         </div>
-        <form id="auth-form" data-mode="login" novalidate>
+        <form id="auth-form" data-mode="login" onsubmit="return false;" novalidate>
           <label id="name-field" hidden>Your name<input name="name" autocomplete="name" maxlength="120" placeholder="e.g. Alex Morgan"></label>
           <label>Email address<input name="email" type="email" autocomplete="email" maxlength="190" required placeholder="you@example.com"></label>
           <label id="password-field">Password<input name="password" type="password" autocomplete="current-password" minlength="6" maxlength="200" required placeholder="At least 6 characters"></label>
